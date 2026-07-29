@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Navigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { useTheme } from '../contexts/ThemeContext'
 import { login } from '../api/client'
@@ -7,19 +7,28 @@ import { Camera, Sun, Moon, Eye, EyeOff } from 'lucide-react'
 
 export default function LoginPage() {
   const navigate = useNavigate()
-  const { refresh } = useAuth()
+  const { user, loading, refresh } = useAuth()
   const { mode, toggle } = useTheme()
   const [err, setErr] = useState('')
-  const [loading, setLoading] = useState(false)
+  const [loadingForm, setLoadingForm] = useState(false)
   const [showPass, setShowPass] = useState(false)
   const [remember, setRemember] = useState(false)
   const usernameRef = useRef<HTMLInputElement>(null)
   const passwordRef = useRef<HTMLInputElement>(null)
 
+  if (loading) {
+    return <div style={{ minHeight: '100vh', background: 'var(--bg-primary)' }} />
+  }
+
+  if (user) {
+    return <Navigate to="/" replace />
+  }
+
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setErr('')
-    setLoading(true)
+    setLoadingForm(true)
     try {
       // Auto-trim username, no auto-uppercase (backend is case-sensitive)
       const username = (usernameRef.current!.value || '').trim()
@@ -31,7 +40,7 @@ export default function LoginPage() {
       const msg = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
       setErr(msg || 'Sai username hoặc password')
     } finally {
-      setLoading(false)
+      setLoadingForm(false)
     }
   }
 
@@ -130,10 +139,10 @@ export default function LoginPage() {
 
           <button
             type="submit"
-            disabled={loading}
-            style={{ background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 10, padding: '.65rem', fontWeight: 700, fontSize: '.9rem', cursor: 'pointer', opacity: loading ? .6 : 1, transition: 'opacity .15s' }}
+            disabled={loadingForm}
+            style={{ background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 10, padding: '.65rem', fontWeight: 700, fontSize: '.9rem', cursor: 'pointer', opacity: loadingForm ? .6 : 1, transition: 'opacity .15s' }}
           >
-            {loading ? 'Đang đăng nhập…' : 'Đăng nhập'}
+            {loadingForm ? 'Đang đăng nhập…' : 'Đăng nhập'}
           </button>
         </form>
       </div>
