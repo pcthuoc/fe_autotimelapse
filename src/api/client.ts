@@ -20,12 +20,15 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (r) => r,
   (err) => {
-    if (err.response?.status === 401) {
-      window.location.href = '/login/?next=' + encodeURIComponent(window.location.pathname)
+    if (err.response?.status === 401 || err.response?.status === 403) {
+      if (!window.location.pathname.startsWith('/login')) {
+        window.location.href = '/login/?next=' + encodeURIComponent(window.location.pathname)
+      }
     }
     return Promise.reject(err)
   },
 )
+
 
 // ── Auth ──────────────────────────────────────────────
 export const login = (username: string, password: string, remember: boolean) =>
