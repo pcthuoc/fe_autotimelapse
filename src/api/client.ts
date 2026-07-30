@@ -60,6 +60,8 @@ export const getCameraMqttStatus = (pk: string) => api.get(`/cameras/${pk}/mqtt-
 
 export const registerCameraMqtt = (pk: string) => api.post(`/cameras/${pk}/mqtt-register/`)
 
+export const powerOnCM4 = (pk: string) => api.post(`/cameras/${pk}/power-on-cm4/`)
+
 export const updateCamera = (pk: string, data: Record<string, unknown>) =>
   api.patch(`/cameras/${pk}/`, data)
 

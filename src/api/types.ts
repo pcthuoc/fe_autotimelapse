@@ -80,6 +80,11 @@ export interface Client {
 export interface CameraDevice {
   id: string
   last_seen_at: string | null
+  esp32_last_seen_at?: string | null
+  esp32_firmware?: string
+  cm4_power_state?: 'off' | 'powering_on' | 'running' | 'shutting_down'
+  cm4_last_seen_at?: string | null
+  sim_active_node?: 'esp32' | 'cm4'
   battery_percent: number | null
   battery_voltage: number | null
   is_charging: boolean
