@@ -770,15 +770,12 @@ function AddCameraModal({ onClose }: { onClose: () => void }) {
     if (!created) return
     const cfg = created.simconfig
     const text = [
-      `# ── Thông số cố định ────────────────────────────────`,
+      `# ── Thông số kết nối MQTT ───────────────────`,
       `CAMERA_CODE     = "${cfg.CAMERA_CODE}"`,
       `MQTT_PASSWORD   = "${cfg.MQTT_PASSWORD}"`,
       `MQTT_BROKER     = "${cfg.MQTT_BROKER}"`,
       `MQTT_PORT       = ${cfg.MQTT_PORT}`,
-      ``,
       `SERVER_BASE     = "${cfg.SERVER_BASE}"`,
-      `DEVICE_KEY      = CAMERA_CODE       # = "${cfg.CAMERA_CODE}"`,
-      `DEVICE_SECRET   = MQTT_PASSWORD     # = mqtt_password`,
     ].join('\n')
     navigator.clipboard.writeText(text).then(() => { setCopied('all'); setTimeout(() => setCopied(''), 2000) })
   }
@@ -822,23 +819,20 @@ function AddCameraModal({ onClose }: { onClose: () => void }) {
           </div>
 
           <div style={{ background: 'rgba(96,165,250,.07)', border: '1px solid rgba(96,165,250,.2)', borderRadius: 10, padding: '.7rem .9rem', marginBottom: 12, fontSize: '.77rem', color: 'var(--text-secondary)' }}>
-            📋 Copy thông số bên dưới vào <code>sim.py</code>. Xem lại bất kỳ lúc nào qua nút <strong>📋 sim.py config</strong> trong camera modal.
+            📋 Copy thông số bên dưới để kết nối thiết bị. Xem lại bất kỳ lúc nào qua nút <strong>ℹ Thông tin</strong> trên card camera.
           </div>
 
           <div style={{ background: '#0d1117', borderRadius: 10, padding: '.9rem 1rem', fontFamily: 'monospace', fontSize: '.78rem', lineHeight: 1.8, position: 'relative' }}>
-            <div><span style={{ color: '#6e7681' }}># ── Thông số cố định ───────────</span></div>
+            <div><span style={{ color: '#6e7681' }}># ── Thông số kết nối MQTT ───────────</span></div>
             <div><span style={{ color: '#79c0ff' }}>CAMERA_CODE</span>   = <span style={{ color: '#a5d6ff' }}>"{created.simconfig?.CAMERA_CODE}"</span></div>
             <div><span style={{ color: '#79c0ff' }}>MQTT_PASSWORD</span> = <span style={{ color: '#a5d6ff' }}>"{created.simconfig?.MQTT_PASSWORD}"</span></div>
             <div><span style={{ color: '#79c0ff' }}>MQTT_BROKER</span>   = <span style={{ color: '#a5d6ff' }}>"{created.simconfig?.MQTT_BROKER}"</span></div>
             <div><span style={{ color: '#79c0ff' }}>MQTT_PORT</span>     = <span style={{ color: '#ffa657' }}>{created.simconfig?.MQTT_PORT}</span></div>
             <div style={{ marginTop: 6 }}><span style={{ color: '#79c0ff' }}>SERVER_BASE</span>   = <span style={{ color: '#a5d6ff' }}>"{created.simconfig?.SERVER_BASE}"</span></div>
-            <div><span style={{ color: '#79c0ff' }}>DEVICE_KEY</span>    = <span style={{ color: '#a5d6ff' }}>"{created.simconfig?.DEVICE_KEY}"</span></div>
-            <div><span style={{ color: '#79c0ff' }}>DEVICE_SECRET</span> = <span style={{ color: '#a5d6ff' }}>"{created.simconfig?.DEVICE_SECRET}"</span></div>
             <button onClick={copyAll} style={{ position: 'absolute', top: 8, right: 8, background: copied ? 'rgba(52,211,153,.2)' : 'rgba(255,255,255,.06)', border: '1px solid rgba(255,255,255,.1)', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: '.68rem', color: copied ? '#34d399' : '#8b949e', fontFamily: 'inherit' }}>
               {copied ? '✓ Đã copy' : '⎘ Copy'}
             </button>
           </div>
-          <div style={{ fontSize: '.68rem', color: '#fbbf24', marginTop: 8 }}>⚠️ DEVICE_KEY (Credential Key ID) và DEVICE_SECRET (Secret) dùng cho API nạp ảnh S3. DEVICE_SECRET chỉ hiển thị 1 lần duy nhất khi tạo camera.</div>
 
 
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 14 }}>
