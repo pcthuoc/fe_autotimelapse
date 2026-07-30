@@ -150,6 +150,7 @@ export interface Camera {
   status: 'active' | 'inactive' | 'maintenance'
   camera_model: string
   timezone: string
+  mqtt_password?: string
   site: Site | null
   device: CameraDevice | null
   latest_thumb_url: string | null

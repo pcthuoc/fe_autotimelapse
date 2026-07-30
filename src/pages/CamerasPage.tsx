@@ -13,7 +13,7 @@ import { useAuth } from '../contexts/AuthContext'
 import {
   Search, Camera as CameraIcon, Wifi, WifiOff,
   X, Plus, RefreshCw, Settings, Building2, Clock, Image as ImageIcon, Shield,
-  ChevronDown, ChevronRight, Wifi as WifiOn, LayoutGrid,
+  ChevronDown, ChevronRight, Wifi as WifiOn, LayoutGrid, Info, Copy, Check, Key,
 } from 'lucide-react'
 
 /* ── util ── */
@@ -1067,13 +1067,14 @@ function AddCameraModal({ onClose }: { onClose: () => void }) {
             <div><span style={{ color: '#79c0ff' }}>MQTT_BROKER</span>   = <span style={{ color: '#a5d6ff' }}>"{created.simconfig?.MQTT_BROKER}"</span></div>
             <div><span style={{ color: '#79c0ff' }}>MQTT_PORT</span>     = <span style={{ color: '#ffa657' }}>{created.simconfig?.MQTT_PORT}</span></div>
             <div style={{ marginTop: 6 }}><span style={{ color: '#79c0ff' }}>SERVER_BASE</span>   = <span style={{ color: '#a5d6ff' }}>"{created.simconfig?.SERVER_BASE}"</span></div>
-            <div style={{ color: '#6e7681' }}><span style={{ color: '#79c0ff' }}>DEVICE_KEY</span>    = CAMERA_CODE     <span style={{ color: '#6e7681' }}># = "{created.simconfig?.CAMERA_CODE}"</span></div>
-            <div style={{ color: '#6e7681' }}><span style={{ color: '#79c0ff' }}>DEVICE_SECRET</span> = MQTT_PASSWORD   <span style={{ color: '#6e7681' }}># = mqtt_password</span></div>
+            <div><span style={{ color: '#79c0ff' }}>DEVICE_KEY</span>    = <span style={{ color: '#a5d6ff' }}>"{created.simconfig?.DEVICE_KEY}"</span></div>
+            <div><span style={{ color: '#79c0ff' }}>DEVICE_SECRET</span> = <span style={{ color: '#a5d6ff' }}>"{created.simconfig?.DEVICE_SECRET}"</span></div>
             <button onClick={copyAll} style={{ position: 'absolute', top: 8, right: 8, background: copied ? 'rgba(52,211,153,.2)' : 'rgba(255,255,255,.06)', border: '1px solid rgba(255,255,255,.1)', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: '.68rem', color: copied ? '#34d399' : '#8b949e', fontFamily: 'inherit' }}>
               {copied ? '✓ Đã copy' : '⎘ Copy'}
             </button>
           </div>
-          <div style={{ fontSize: '.68rem', color: '#34d399', marginTop: 8 }}>✓ Không hết hạn — DEVICE_KEY/SECRET = CAMERA_CODE/MQTT_PASSWORD</div>
+          <div style={{ fontSize: '.68rem', color: '#fbbf24', marginTop: 8 }}>⚠️ DEVICE_KEY (Credential Key ID) và DEVICE_SECRET (Secret) dùng cho API nạp ảnh S3. DEVICE_SECRET chỉ hiển thị 1 lần duy nhất khi tạo camera.</div>
+
 
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 14 }}>
             <button className="atl-btn" onClick={onClose}>Đóng</button>
@@ -1151,10 +1152,186 @@ function AddCameraModal({ onClose }: { onClose: () => void }) {
 }
 
 /* ════════════════════════════════════════════
+   CAMERA INFO & MQTT MODAL
+   ════════════════════════════════════════════ */
+function CameraInfoModal({ cam, onClose }: { cam: Camera; onClose: () => void }) {
+  const qc = useQueryClient()
+  const [formData, setFormData] = useState({
+    name: cam.name || '',
+    code: cam.code || '',
+    mqtt_password: cam.mqtt_password || '',
+    status: cam.status || 'active',
+    camera_model: cam.camera_model || 'generic',
+    timezone: cam.timezone || 'UTC',
+  })
+  const [copiedField, setCopiedField] = useState<string | null>(null)
+
+  const brokerHost = window.location.hostname || 'cloud.congnghetimelapse.com'
+  const brokerPortTcp = '1883'
+  const brokerPortWs = '8083'
+  const pubTopic = `camera/${formData.code}/telemetry`
+  const subTopic = `camera/${formData.code}/command`
+
+  const handleCopy = (text: string, fieldName: string) => {
+    navigator.clipboard.writeText(text)
+    setCopiedField(fieldName)
+    showToast(`Đã copy ${fieldName}!`)
+    setTimeout(() => setCopiedField(null), 2000)
+  }
+
+  const updateMutation = useMutation({
+    mutationFn: () => updateCamera(cam.id, formData),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['cameras'] })
+      showToast('Đã lưu thông số camera')
+    },
+    onError: (err: any) => {
+      const msg = err?.response?.data?.detail || 'Không thể lưu thông số'
+      showToast(msg, 'error')
+    }
+  })
+
+  const fullJson = JSON.stringify({
+    broker: brokerHost,
+    port_tcp: 1883,
+    port_ws: 8083,
+    client_id: formData.code,
+    username: formData.code,
+    password: formData.mqtt_password,
+    publish_topic: pubTopic,
+    subscribe_topic: subTopic,
+    camera_name: formData.name,
+    camera_model: formData.camera_model
+  }, null, 2)
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-box" style={{ maxWidth: 740 }} onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <div style={{ display:'flex', alignItems:'center', gap:8, fontWeight:700 }}>
+            <Info size={18} style={{ color:'var(--accent-light)' }} />
+            THÔNG TIN CAMERA & CẤU HÌNH MQTT
+          </div>
+          <button onClick={onClose} className="atl-btn ghost" style={{ padding:'4px 6px' }}><X size={16} /></button>
+        </div>
+
+        <div className="modal-body" style={{ display:'flex', flexDirection:'column', gap:'1.25rem' }}>
+          {/* Section 1: Edit Camera Parameters */}
+          <div style={{ background:'var(--bg-primary)', border:'1px solid var(--border-color)', borderRadius:10, padding:'1rem' }}>
+            <div style={{ fontSize:'.75rem', fontWeight:700, color:'var(--accent-light)', marginBottom:'.75rem', textTransform:'uppercase', letterSpacing:'.05em', display:'flex', alignItems:'center', gap:6 }}>
+              <Settings size={14} /> Chỉnh sửa thông số Camera
+            </div>
+
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'.75rem' }}>
+              <div>
+                <label className="form-label">Tên Camera</label>
+                <input className="atl-input" style={{ width:'100%' }} value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+              </div>
+              <div>
+                <label className="form-label">Mã Camera / Username MQTT</label>
+                <input className="atl-input" style={{ width:'100%', fontFamily:'monospace' }} value={formData.code} onChange={e => setFormData({...formData, code: e.target.value})} />
+              </div>
+              <div>
+                <label className="form-label">Mật khẩu MQTT (Password)</label>
+                <input className="atl-input" style={{ width:'100%', fontFamily:'monospace' }} value={formData.mqtt_password} onChange={e => setFormData({...formData, mqtt_password: e.target.value})} placeholder="Nhập password MQTT..." />
+              </div>
+              <div>
+                <label className="form-label">Trạng thái</label>
+                <select className="atl-input" style={{ width:'100%' }} value={formData.status} onChange={e => setFormData({...formData, status: e.target.value as any})}>
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
+                  <option value="maintenance">Maintenance</option>
+                </select>
+              </div>
+              <div>
+                <label className="form-label">Dòng máy (Model)</label>
+                <select className="atl-input" style={{ width:'100%' }} value={formData.camera_model} onChange={e => setFormData({...formData, camera_model: e.target.value})}>
+                  <option value="generic">Generic (khác)</option>
+                  <option value="nikon_d5300">Nikon D5300</option>
+                  <option value="nikon_d3500">Nikon D3500</option>
+                  <option value="nikon_d7500">Nikon D7500</option>
+                  <option value="nikon_z50">Nikon Z50</option>
+                  <option value="canon_200d">Canon 200D</option>
+                  <option value="canon_90d">Canon 90D</option>
+                </select>
+              </div>
+              <div>
+                <label className="form-label">Múi giờ (Timezone)</label>
+                <input className="atl-input" style={{ width:'100%' }} value={formData.timezone} onChange={e => setFormData({...formData, timezone: e.target.value})} />
+              </div>
+            </div>
+
+            <div style={{ display:'flex', justifyContent:'flex-end', marginTop:'1rem' }}>
+              <button className="atl-btn primary" onClick={() => updateMutation.mutate()} disabled={updateMutation.isPending}>
+                {updateMutation.isPending ? 'Đang lưu...' : 'Lưu thông số'}
+              </button>
+            </div>
+          </div>
+
+          {/* Section 2: MQTT Copy Credentials */}
+          <div style={{ background:'var(--bg-primary)', border:'1px solid var(--border-color)', borderRadius:10, padding:'1rem' }}>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'.75rem' }}>
+              <div style={{ fontSize:'.75rem', fontWeight:700, color:'var(--status-ok)', textTransform:'uppercase', letterSpacing:'.05em', display:'flex', alignItems:'center', gap:6 }}>
+                <Key size={14} /> Thông số kết nối MQTT (Sao chép nhanh)
+              </div>
+              <button className="atl-btn ghost" style={{ fontSize:'.72rem' }} onClick={() => handleCopy(fullJson, 'JSON MQTT Full')}>
+                {copiedField==='JSON MQTT Full' ? <Check size={12} style={{ color:'var(--status-ok)' }} /> : <Copy size={12}/>} Copy tất cả (JSON)
+              </button>
+            </div>
+
+            <div style={{ display:'flex', flexDirection:'column', gap:'.5rem' }}>
+              <CopyRow label="MQTT Broker Host" value={brokerHost} fieldId="Host MQTT" copiedField={copiedField} onCopy={handleCopy} />
+              <CopyRow label="Port (TCP / WS)" value={`${brokerPortTcp} (TCP) / ${brokerPortWs} (WebSocket)`} copyValue={brokerPortTcp} fieldId="Port TCP" copiedField={copiedField} onCopy={handleCopy} />
+              <CopyRow label="MQTT Username (Code)" value={formData.code} fieldId="Username MQTT" copiedField={copiedField} onCopy={handleCopy} isCode />
+              <CopyRow label="MQTT Password" value={formData.mqtt_password || '(Chưa tạo)'} copyValue={formData.mqtt_password} fieldId="Password MQTT" copiedField={copiedField} onCopy={handleCopy} isCode />
+              <CopyRow label="Publish Topic" value={pubTopic} fieldId="Publish Topic" copiedField={copiedField} onCopy={handleCopy} isCode />
+              <CopyRow label="Subscribe Topic" value={subTopic} fieldId="Subscribe Topic" copiedField={copiedField} onCopy={handleCopy} isCode />
+            </div>
+          </div>
+        </div>
+
+        <div className="modal-footer" style={{ justifyContent:'space-between' }}>
+          <Link to={`/cameras/${cam.id}/live`} className="atl-btn" style={{ fontSize:'.75rem' }} onClick={onClose}>
+            <Wifi size={13}/> Xem Live Video
+          </Link>
+          <button className="atl-btn" onClick={onClose}>Đóng</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function CopyRow({ label, value, copyValue, fieldId, copiedField, onCopy, isCode }: {
+  label: string
+  value: string
+  copyValue?: string
+  fieldId: string
+  copiedField: string | null
+  onCopy: (text: string, fieldId: string) => void
+  isCode?: boolean
+}) {
+  const textToCopy = copyValue ?? value
+  const isCopied = copiedField === fieldId
+
+  return (
+    <div style={{ display:'grid', gridTemplateColumns:'170px 1fr auto', alignItems:'center', gap:8, background:'var(--bg-secondary)', padding:'.4rem .65rem', borderRadius:6, border:'1px solid var(--border-color)' }}>
+      <span style={{ fontSize:'.72rem', color:'var(--text-muted)', fontWeight:600 }}>{label}</span>
+      <span style={{ fontSize:'.78rem', color:'var(--text-primary)', fontFamily: isCode?'monospace':'inherit', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+        {value}
+      </span>
+      <button className="atl-btn ghost" style={{ padding:'3px 8px', fontSize:'.7rem' }} onClick={() => onCopy(textToCopy, fieldId)}>
+        {isCopied ? <Check size={12} style={{ color:'var(--status-ok)' }} /> : <Copy size={12} />}
+        {isCopied ? 'Copied' : 'Copy'}
+      </button>
+    </div>
+  )
+}
+
+/* ════════════════════════════════════════════
    CAMERA CARD — bambuddy style
    ════════════════════════════════════════════ */
 function CameraCard({ cam }: { cam: Camera }) {
-  const [modal, setModal] = useState<'control'|'access'|null>(null)
+  const [modal, setModal] = useState<'control'|'access'|'info'|null>(null)
   const dev = cam.device
   const batt = dev?.battery_percent ?? null
   const battColor = batt===null?'var(--text-muted)':batt<20?'var(--status-error)':batt<50?'var(--status-warning)':'var(--status-ok)'
@@ -1163,6 +1340,7 @@ function CameraCard({ cam }: { cam: Camera }) {
     <>
       {modal==='control' && <CameraDeviceModal cam={cam} onClose={()=>setModal(null)} />}
       {modal==='access'  && <AccessModal       cam={cam} onClose={()=>setModal(null)} />}
+      {modal==='info'    && <CameraInfoModal   cam={cam} onClose={()=>setModal(null)} />}
 
       <div className="atl-card cam-card" style={{ cursor:'pointer' }} onClick={()=>setModal('control')}>
         {/* ── Header: name + status ── */}
@@ -1265,9 +1443,9 @@ function CameraCard({ cam }: { cam: Camera }) {
           <Link to={`/media/camera/${cam.id}`} className="atl-btn" style={{ fontSize:'.7rem' }} onClick={(e)=>e.stopPropagation()}>
             <ImageIcon size={12}/> Gallery
           </Link>
-          <Link to={`/cameras/${cam.id}/live`} className="atl-btn" style={{ fontSize:'.7rem' }} onClick={(e)=>e.stopPropagation()}>
-            Live
-          </Link>
+          <button className="atl-btn" style={{ fontSize:'.7rem' }} onClick={(e)=>{ e.stopPropagation(); setModal('info') }}>
+            <Info size={12}/> Thông tin
+          </button>
           <button className="atl-btn" style={{ fontSize:'.7rem' }} onClick={(e)=>{ e.stopPropagation(); setModal('control') }}>
             <Settings size={12}/> Config
           </button>
