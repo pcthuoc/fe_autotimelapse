@@ -79,17 +79,7 @@ export const getCameraSettings = (pk: string) => api.get(`/cameras/${pk}/camera-
 export const updateCameraSettings = (pk: string, data: Record<string, unknown>) =>
   api.patch(`/cameras/${pk}/camera-settings/`, data)
 
-// ── Camera Access ──────────────────────────────────────
-export const getCameraAccess = (pk: string) => api.get(`/cameras/${pk}/access/`)
 
-export const grantCameraAccess = (pk: string, data: Record<string, unknown>) =>
-  api.post(`/cameras/${pk}/access/`, data)
-
-export const updateCameraAccess = (pk: string, accPk: string, data: Record<string, unknown>) =>
-  api.patch(`/cameras/${pk}/access/${accPk}/`, data)
-
-export const revokeCameraAccess = (pk: string, accPk: string) =>
-  api.delete(`/cameras/${pk}/access/${accPk}/`)
 
 // ── Sites ─────────────────────────────────────────────
 export const getSites = () => api.get('/sites/')

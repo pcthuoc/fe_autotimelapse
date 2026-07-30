@@ -4,11 +4,10 @@ import { Link } from 'react-router-dom'
 import {
   getCameras, getCameraDevice, getCameraSettings, getLiveLatest,
   updateCamera, createCamera, updateCameraDevice,
-  getCameraAccess, grantCameraAccess, updateCameraAccess, revokeCameraAccess,
   getSites, createSite, searchUsers, regenerateCredential,
   getCameraMqttStatus, registerCameraMqtt,
 } from '../api/client'
-import type { Camera, CameraAccess, CameraAccessResponse, Site } from '../api/types'
+import type { Camera, Site } from '../api/types'
 import { useAuth } from '../contexts/AuthContext'
 import {
   Search, Camera as CameraIcon, Wifi, WifiOff,
@@ -715,202 +714,7 @@ function CameraDeviceModal({ cam, onClose }: { cam: Camera; onClose: () => void 
 /* ════════════════════════════════════════════
    MODAL: ACCESS MANAGEMENT
    ════════════════════════════════════════════ */
-function AccessModal({ cam, onClose }: { cam: Camera; onClose: () => void }) {
-  const qc = useQueryClient()
-  const [userId, setUserId] = useState('')
-  const [userQuery, setUserQuery] = useState('')
-  const [searchResults, setSearchResults] = useState<{id:number; username:string; email:string; full_name:string}[]>([])
-  const [showDropdown, setShowDropdown] = useState(false)
-  const [grantPerm, setGrantPerm] = useState({
-    can_view: true,
-    can_manage: false,
-    can_download: false,
-    can_delete_media: false,
-  })
 
-  /* ── user search debounce ── */
-  useEffect(() => {
-    if (!userQuery.trim()) { setSearchResults([]); return }
-    const t = setTimeout(() => {
-      searchUsers(userQuery).then(r => {
-        const existing = new Set((qc.getQueryData<CameraAccessResponse>(['camera-access', cam.id])?.accesses ?? []).map(a => a.user_id))
-        setSearchResults((r.data.results ?? []).filter((u: any) => !existing.has(u.id)))
-        setShowDropdown(true)
-      }).catch(() => setSearchResults([]))
-    }, 300)
-    return () => clearTimeout(t)
-  }, [userQuery, cam.id, qc])
-
-  const { data, isLoading, error } = useQuery<CameraAccessResponse>({
-    queryKey: ['camera-access', cam.id],
-    queryFn: () => getCameraAccess(cam.id).then(r => r.data),
-  })
-
-  const grantMutation = useMutation({
-    mutationFn: () => grantCameraAccess(cam.id, { user_id: Number(userId), ...grantPerm }),
-    onSuccess: () => {
-      setUserId(''); setUserQuery(''); setSearchResults([])
-      qc.invalidateQueries({ queryKey: ['camera-access', cam.id] })
-      showToast('Đã cấp quyền truy cập camera')
-    },
-    onError: () => showToast('Không thể cấp quyền', 'error'),
-  })
-
-  const updateMutation = useMutation({
-    mutationFn: ({ accId, payload }: { accId: string; payload: Record<string, boolean> }) =>
-      updateCameraAccess(cam.id, accId, payload),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['camera-access', cam.id] }),
-    onError: () => showToast('Không thể cập nhật quyền', 'error'),
-  })
-
-  const revokeMutation = useMutation({
-    mutationFn: (accId: string) => revokeCameraAccess(cam.id, accId),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['camera-access', cam.id] })
-      showToast('Đã thu hồi quyền truy cập')
-    },
-    onError: () => showToast('Không thể thu hồi quyền', 'error'),
-  })
-
-  const toggleAccessField = (
-    acc: CameraAccess,
-    field: 'can_view' | 'can_manage' | 'can_download' | 'can_delete_media',
-    value: boolean,
-  ) => {
-    updateMutation.mutate({ accId: acc.id, payload: { [field]: value } })
-  }
-
-  useEffect(() => {
-    const h = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
-    window.addEventListener('keydown', h)
-    return () => window.removeEventListener('keydown', h)
-  }, [onClose])
-
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-box" style={{ maxWidth: 760 }} onClick={e => e.stopPropagation()}>
-        <div className="modal-header">
-          <div style={{ display:'flex', alignItems:'center', gap:8, fontWeight:700 }}>
-            <Shield size={16} style={{ color:'var(--accent-light)' }} />
-            Camera Access — {cam.name}
-          </div>
-          <button onClick={onClose} className="atl-btn ghost" style={{ padding:'4px 6px' }}><X size={16} /></button>
-        </div>
-
-        <div className="modal-body">
-          {error && (
-            <div style={{ background:'rgba(239,68,68,.1)', color:'var(--status-error)', borderRadius:8, padding:'.6rem .8rem', marginBottom:'1rem' }}>
-              Bạn không có quyền quản lý access cho camera này.
-            </div>
-          )}
-
-          {!error && (
-            <>
-              <div style={{ background:'var(--bg-primary)', border:'1px solid var(--border-color)', borderRadius:10, padding:'.75rem', marginBottom:'1rem' }}>
-                <div style={{ fontSize:'.72rem', color:'var(--text-muted)', marginBottom:8, textTransform:'uppercase', letterSpacing:'.05em' }}>
-                  Grant Access
-                </div>
-                <div style={{ display:'grid', gridTemplateColumns:'1fr auto', gap:8, alignItems:'end' }}>
-                  <div style={{ position:'relative' }}>
-                    <label className="form-label">Tìm user (username / email)</label>
-                    <input className="atl-input" style={{ width:'100%' }} placeholder="Gõ để tìm kiếm…"
-                           value={userQuery}
-                           onChange={e => { setUserQuery(e.target.value); setUserId('') }}
-                           onFocus={() => searchResults.length > 0 && setShowDropdown(true)} />
-                    {showDropdown && searchResults.length > 0 && (
-                      <div style={{ position:'absolute', top:'100%', left:0, right:0, zIndex:50, marginTop:4,
-                                    background:'var(--bg-secondary)', border:'1px solid var(--border-bright)', borderRadius:9,
-                                    boxShadow:'0 8px 24px rgba(0,0,0,.4)', maxHeight:200, overflowY:'auto' }}>
-                        {searchResults.map(u => (
-                          <button key={u.id}
-                                  style={{ display:'flex', alignItems:'center', gap:8, width:'100%', padding:'.5rem .7rem',
-                                           background: userId===String(u.id)?'var(--bg-hover)':'transparent', border:'none',
-                                           cursor:'pointer', textAlign:'left' }}
-                                  onClick={() => { setUserId(String(u.id)); setUserQuery(u.username); setShowDropdown(false) }}>
-                            <span style={{ width:24, height:24, borderRadius:'50%', background:'rgba(96,165,250,.15)', color:'#60a5fa',
-                                           display:'flex', alignItems:'center', justifyContent:'center', fontSize:'.62rem', fontWeight:800, flexShrink:0 }}>
-                              {u.username.slice(0,2).toUpperCase()}
-                            </span>
-                            <span style={{ fontSize:'.78rem', fontWeight:600, color:'var(--text-primary)' }}>{u.username}</span>
-                            {u.full_name && <span style={{ fontSize:'.68rem', color:'var(--text-muted)' }}>{u.full_name}</span>}
-                            {u.email && <span style={{ fontSize:'.68rem', color:'var(--text-muted)', marginLeft:'auto' }}>{u.email}</span>}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  <button className="atl-btn primary" disabled={!userId || grantMutation.isPending} onClick={() => grantMutation.mutate()}>
-                    {grantMutation.isPending ? 'Đang cấp…' : 'Grant'}
-                  </button>
-                </div>
-                <div style={{ display:'flex', flexWrap:'wrap', gap:12, marginTop:10 }}>
-                  {[
-                    ['can_view', 'View'],
-                    ['can_manage', 'Manage'],
-                    ['can_download', 'Download'],
-                    ['can_delete_media', 'Delete media'],
-                  ].map(([field, label]) => (
-                    <label key={field} style={{ display:'inline-flex', alignItems:'center', gap:6, fontSize:'.78rem' }}>
-                      <input
-                        type="checkbox"
-                        checked={grantPerm[field as keyof typeof grantPerm]}
-                        onChange={e => setGrantPerm(p => ({ ...p, [field]: e.target.checked }))}
-                        style={{ accentColor:'var(--accent)' }}
-                      />
-                      {label}
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              <div style={{ fontSize:'.72rem', color:'var(--text-muted)', marginBottom:8, textTransform:'uppercase', letterSpacing:'.05em' }}>
-                Users with Access
-              </div>
-              {isLoading && <div style={{ color:'var(--text-muted)' }}>Loading access list...</div>}
-              {!isLoading && (data?.accesses ?? []).length === 0 && (
-                <div style={{ color:'var(--text-muted)' }}>Chưa có user nào được cấp quyền.</div>
-              )}
-
-              <div style={{ display:'grid', gap:8 }}>
-                {(data?.accesses ?? []).map((acc) => (
-                  <div key={acc.id} style={{ border:'1px solid var(--border-color)', borderRadius:10, padding:'.7rem .8rem' }}>
-                    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:8, marginBottom:8 }}>
-                      <div>
-                        <div style={{ fontWeight:700 }}>{acc.username}</div>
-                        <div style={{ fontSize:'.72rem', color:'var(--text-muted)' }}>{acc.email || 'No email'}</div>
-                      </div>
-                      <button className="atl-btn" style={{ color:'var(--status-error)' }} onClick={() => revokeMutation.mutate(acc.id)}>
-                        Revoke
-                      </button>
-                    </div>
-                    <div style={{ display:'flex', flexWrap:'wrap', gap:12 }}>
-                      {[
-                        ['can_view', 'View'],
-                        ['can_manage', 'Manage'],
-                        ['can_download', 'Download'],
-                        ['can_delete_media', 'Delete media'],
-                      ].map(([field, label]) => (
-                        <label key={field} style={{ display:'inline-flex', alignItems:'center', gap:6, fontSize:'.78rem' }}>
-                          <input
-                            type="checkbox"
-                            checked={Boolean(acc[field as keyof CameraAccess])}
-                            onChange={e => toggleAccessField(acc, field as 'can_view'|'can_manage'|'can_download'|'can_delete_media', e.target.checked)}
-                            style={{ accentColor:'var(--accent)' }}
-                          />
-                          {label}
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </>
-          )}
-        </div>
-      </div>
-    </div>
-  )
-}
 
 /* ════════════════════════════════════════════
    MODAL: ADD SITE
@@ -1331,7 +1135,7 @@ function CopyRow({ label, value, copyValue, fieldId, copiedField, onCopy, isCode
    CAMERA CARD — bambuddy style
    ════════════════════════════════════════════ */
 function CameraCard({ cam }: { cam: Camera }) {
-  const [modal, setModal] = useState<'control'|'access'|'info'|null>(null)
+  const [modal, setModal] = useState<'control'|'info'|null>(null)
   const dev = cam.device
   const batt = dev?.battery_percent ?? null
   const battColor = batt===null?'var(--text-muted)':batt<20?'var(--status-error)':batt<50?'var(--status-warning)':'var(--status-ok)'
@@ -1339,7 +1143,6 @@ function CameraCard({ cam }: { cam: Camera }) {
   return (
     <>
       {modal==='control' && <CameraDeviceModal cam={cam} onClose={()=>setModal(null)} />}
-      {modal==='access'  && <AccessModal       cam={cam} onClose={()=>setModal(null)} />}
       {modal==='info'    && <CameraInfoModal   cam={cam} onClose={()=>setModal(null)} />}
 
       <div className="atl-card cam-card" style={{ cursor:'pointer' }} onClick={()=>setModal('control')}>
