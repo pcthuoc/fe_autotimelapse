@@ -537,45 +537,6 @@ function CameraDeviceModal({ cam, onClose }: { cam: Camera; onClose: () => void 
           {/* RIGHT: SIM + settings + camera settings */}
           <div style={{ display:'flex', flexDirection:'column', gap:12, minWidth:0 }}>
 
-            {/* Thông tin camera — sửa tên / model / timezone / công trình */}
-            <div style={{ border:'1px solid var(--border-color)', borderRadius:10, padding:'.7rem .8rem' }}>
-              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
-                <span className="section-label" style={{ margin:0 }}>THÔNG TIN CAMERA</span>
-                <button className="atl-btn primary" style={{ fontSize:'.7rem' }} disabled={savingInfo || !infoForm.name.trim()} onClick={saveInfo}>
-                  {savingInfo ? 'Đang lưu…' : 'Lưu thông tin'}
-                </button>
-              </div>
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
-                <div style={{ gridColumn:'1 / -1' }}>
-                  <label style={{ fontSize:'.65rem', color:'var(--text-muted)', display:'block', marginBottom:3 }}>Tên camera</label>
-                  <input className="atl-input" style={{ width:'100%', fontSize:'.78rem' }} value={infoForm.name}
-                         onChange={e=>setInfoForm(f=>({...f, name:e.target.value}))} />
-                </div>
-                <div>
-                  <label style={{ fontSize:'.65rem', color:'var(--text-muted)', display:'block', marginBottom:3 }}>Model</label>
-                  <select className="atl-select" style={{ width:'100%', fontSize:'.78rem' }} value={infoForm.camera_model}
-                          onChange={e=>setInfoForm(f=>({...f, camera_model:e.target.value}))}>
-                    {CAMERA_MODELS.map(m=><option key={m.v} value={m.v}>{m.label}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label style={{ fontSize:'.65rem', color:'var(--text-muted)', display:'block', marginBottom:3 }}>Timezone</label>
-                  <select className="atl-select" style={{ width:'100%', fontSize:'.78rem' }} value={infoForm.timezone}
-                          onChange={e=>setInfoForm(f=>({...f, timezone:e.target.value}))}>
-                    {TIMEZONES.map(t=><option key={t.v} value={t.v}>{t.label}</option>)}
-                  </select>
-                </div>
-                <div style={{ gridColumn:'1 / -1' }}>
-                  <label style={{ fontSize:'.65rem', color:'var(--text-muted)', display:'block', marginBottom:3 }}>Công trình (site)</label>
-                  <select className="atl-select" style={{ width:'100%', fontSize:'.78rem' }} value={infoForm.site_id}
-                          onChange={e=>setInfoForm(f=>({...f, site_id:e.target.value}))}>
-                    <option value="">— Chưa gán công trình —</option>
-                    {(sitesInfo ?? []).map(s=><option key={s.id} value={s.id}>{s.name}{s.client_name?` · ${s.client_name}`:''}</option>)}
-                  </select>
-                </div>
-              </div>
-            </div>
-
             {/* SIM info + device settings */}
             <div style={{ display:'grid', gridTemplateColumns:'1fr auto', gap:12, alignItems:'start' }}>
 
