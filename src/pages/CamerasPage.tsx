@@ -1449,9 +1449,6 @@ function CameraCard({ cam }: { cam: Camera }) {
           <button className="atl-btn" style={{ fontSize:'.7rem' }} onClick={(e)=>{ e.stopPropagation(); setModal('control') }}>
             <Settings size={12}/> Config
           </button>
-          <button className="atl-btn" style={{ fontSize:'.7rem' }} onClick={(e)=>{ e.stopPropagation(); setModal('access') }}>
-            <Shield size={12}/> Access
-          </button>
         </div>
       </div>
     </>
