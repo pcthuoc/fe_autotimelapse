@@ -5,7 +5,7 @@ import {
   getCameras, getCameraDevice, getCameraSettings, getLiveLatest,
   updateCamera, createCamera, updateCameraDevice,
   getSites, createSite, searchUsers, regenerateCredential,
-  getCameraMqttStatus, registerCameraMqtt, powerOnCM4,
+  getCameraMqttStatus, registerCameraMqtt, powerOnCM4, powerOffCM4,
 } from '../api/client'
 import type { Camera, Site } from '../api/types'
 import { useAuth } from '../contexts/AuthContext'
@@ -481,6 +481,20 @@ function CameraDeviceModal({ cam, onClose }: { cam: Camera; onClose: () => void 
     }
   }
 
+  const handlePowerOffCM4 = async () => {
+    setPoweringCM4(true)
+    try {
+      await powerOffCM4(cam.id)
+      showToast('Đã gửi lệnh MQTT power_off_cm4. CM4 sẽ tắt và khôi phục chu kỳ tự động.')
+      qc.invalidateQueries({ queryKey: ['device', cam.id] })
+      qc.invalidateQueries({ queryKey: ['cameras'] })
+    } catch (err: any) {
+      showToast(err?.response?.data?.detail || 'Lỗi gửi lệnh tắt CM4', 'error')
+    } finally {
+      setPoweringCM4(false)
+    }
+  }
+
   /* ── computed ── */
   const caps = ((camSettings as any)?.capabilities || {}) as Record<string, {choices?: string[]; writable?: boolean}>
   const applied = ((camSettings as any)?.applied || {}) as Record<string, string>
@@ -506,8 +520,8 @@ function CameraDeviceModal({ cam, onClose }: { cam: Camera; onClose: () => void 
             <MqttStatusBadge camId={cam.id} camCode={cam.code} />
             {/* CM4 Power Badge */}
             {(() => {
-              const color = isCM4Running ? '#10b981' : cm4State === 'powering_on' ? '#f59e0b' : '#6b7280'
-              const label = isCM4Running ? '🟢 CM4 Online' : cm4State === 'powering_on' ? '⚡ CM4 Booting...' : '💤 CM4 OFF'
+              const color = isCM4Running ? '#10b981' : cm4State === 'powering_on' ? '#f59e0b' : cm4State === 'shutting_down' ? '#ef4444' : '#6b7280'
+              const label = isCM4Running ? '🟢 CM4 Online' : cm4State === 'powering_on' ? '⚡ CM4 Booting...' : cm4State === 'shutting_down' ? '🔴 CM4 Shutting Down' : '💤 CM4 OFF (Auto Cycle)'
               return (
                 <span style={{ fontSize:'.68rem', fontWeight:700, color, background: `${color}18`, padding:'.2rem .5rem', borderRadius:6, border: `1px solid ${color}33` }}>
                   {label}
@@ -521,20 +535,26 @@ function CameraDeviceModal({ cam, onClose }: { cam: Camera; onClose: () => void 
         {/* ── Body grid ── */}
         <div className="modal-body" style={{ display:'grid', gridTemplateColumns:'min(360px,36%) 1fr', gap:16 }}>
 
-          {/* Banner nếu CM4 chưa RUNNING */}
-          {!isCM4Running && (
-            <div style={{ gridColumn: '1 / -1', background:'rgba(245,158,11,.12)', border:'1px solid rgba(245,158,11,.3)', padding:'.75rem 1rem', borderRadius:8, display:'flex', alignItems:'center', justifyContent:'space-between', gap:12 }}>
-              <div style={{ fontSize:'.78rem', color:'#f59e0b' }}>
-                <strong>⚡ Trạng thái lõi CM4: {cm4State === 'powering_on' ? 'Đang bật nguồn...' : 'Đang ngủ (OFF)'}</strong>
-                <div style={{ fontSize:'.72rem', color:'var(--text-muted)', marginTop:2 }}>
-                  Lõi CM4 đo cảm biến Pin/Solar/Môi trường & giao tiếp Máy ảnh Nikon. Trước khi chỉnh sửa thông số, CM4 cần được bật nguồn. ESP32-S3 sẽ đệm lệnh và chuyển tiếp qua Inter-Node UART ngay khi CM4 khởi động.
-                </div>
+          {/* Banner CM4 Power & Auto-Cycle Management */}
+          <div style={{ gridColumn: '1 / -1', background: isCM4Running ? 'rgba(16,185,129,.1)' : 'rgba(245,158,11,.12)', border: `1px solid ${isCM4Running ? 'rgba(16,185,129,.3)' : 'rgba(245,158,11,.3)'}`, padding:'.75rem 1rem', borderRadius:8, display:'flex', alignItems:'center', justifyContent:'space-between', gap:12 }}>
+            <div style={{ fontSize:'.78rem', color: isCM4Running ? '#10b981' : '#f59e0b' }}>
+              <strong>⚡ Nguồn lõi CM4: {isCM4Running ? 'Đang bật (Cưỡng bức)' : cm4State === 'powering_on' ? 'Đang bật...' : cm4State === 'shutting_down' ? 'Đang tắt...' : 'Đang ngủ (Theo chu kỳ ESP32)'}</strong>
+              <div style={{ fontSize:'.72rem', color:'var(--text-muted)', marginTop:2 }}>
+                {isCM4Running
+                  ? 'CM4 đang bật cưỡng bức để xem/chỉnh thông số. Sau khi thao tác xong, hãy bấm "Tắt CM4" để ESP32-S3 quay lại quản lý chu kỳ ngủ/bật tự động tiết kiệm pin.'
+                  : 'Trạm đang chạy chế độ ngủ tiết kiệm điện theo chu kỳ của ESP32-S3. Bấm "Cưỡng bức bật CM4" nếu cần chỉnh thông số máy ảnh ngay.'}
               </div>
-              <button className="atl-btn primary" style={{ flexShrink:0, fontSize:'.75rem' }} disabled={poweringCM4 || cm4State === 'powering_on'} onClick={handlePowerOnCM4}>
-                {poweringCM4 || cm4State === 'powering_on' ? '⚡ Đang bật CM4...' : '⚡ Bật Nguồn CM4 (power_on_cm4)'}
-              </button>
             </div>
-          )}
+            {isCM4Running ? (
+              <button className="atl-btn ghost" style={{ flexShrink:0, fontSize:'.75rem', borderColor:'rgba(239,68,68,.4)', color:'#ef4444' }} disabled={poweringCM4} onClick={handlePowerOffCM4}>
+                {poweringCM4 ? '⏳ Đang gửi...' : '🔴 Tắt CM4 (Khôi phục chu kỳ)'}
+              </button>
+            ) : (
+              <button className="atl-btn primary" style={{ flexShrink:0, fontSize:'.75rem' }} disabled={poweringCM4 || cm4State === 'powering_on'} onClick={handlePowerOnCM4}>
+                {poweringCM4 || cm4State === 'powering_on' ? '⚡ Đang bật...' : '⚡ Cưỡng bức Bật CM4'}
+              </button>
+            )}
+          </div>
 
           {/* LEFT: photo + controls */}
           <div>
