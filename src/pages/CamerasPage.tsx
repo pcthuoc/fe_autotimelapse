@@ -533,10 +533,10 @@ function CameraDeviceModal({ cam, onClose }: { cam: Camera; onClose: () => void 
         </div>
 
         {/* ── Body grid ── */}
-        <div className="modal-body" style={{ display:'grid', gridTemplateColumns:'min(360px,36%) 1fr', gap:16 }}>
+        <div className="modal-body cam-modal-grid">
 
           {/* Banner CM4 Power & Auto-Cycle Management */}
-          <div style={{ gridColumn: '1 / -1', background: isCM4Running ? 'rgba(16,185,129,.1)' : 'rgba(245,158,11,.12)', border: `1px solid ${isCM4Running ? 'rgba(16,185,129,.3)' : 'rgba(245,158,11,.3)'}`, padding:'.75rem 1rem', borderRadius:8, display:'flex', alignItems:'center', justifyContent:'space-between', gap:12 }}>
+          <div className="cm4-power-banner" style={{ background: isCM4Running ? 'rgba(16,185,129,.1)' : 'rgba(245,158,11,.12)', border: `1px solid ${isCM4Running ? 'rgba(16,185,129,.3)' : 'rgba(245,158,11,.3)'}` }}>
             <div style={{ fontSize:'.78rem', color: isCM4Running ? '#10b981' : '#f59e0b' }}>
               <strong>⚡ Nguồn lõi CM4: {isCM4Running ? 'Đang bật (Cưỡng bức)' : cm4State === 'powering_on' ? 'Đang bật...' : cm4State === 'shutting_down' ? 'Đang tắt...' : 'Đang ngủ (Theo chu kỳ ESP32)'}</strong>
               <div style={{ fontSize:'.72rem', color:'var(--text-muted)', marginTop:2 }}>
@@ -602,7 +602,7 @@ function CameraDeviceModal({ cam, onClose }: { cam: Camera; onClose: () => void 
           <div style={{ display:'flex', flexDirection:'column', gap:12, minWidth:0 }}>
 
             {/* SIM info + device settings */}
-            <div style={{ display:'grid', gridTemplateColumns:'1fr auto', gap:12, alignItems:'start' }}>
+            <div className="device-settings-grid">
 
               {/* SIM info */}
               <div style={{ border:'1px solid var(--border-color)', borderRadius:10, padding:'.7rem .8rem' }}>
@@ -670,7 +670,7 @@ function CameraDeviceModal({ cam, onClose }: { cam: Camera; onClose: () => void 
                   </span>
                 </div>
               </div>
-              <div style={{ display:'grid', gridTemplateColumns:'repeat(4,minmax(0,1fr))', gap:8 }}>
+              <div className="camera-settings-grid">
                 {CAM_SETTINGS_FIELDS.map(({ key, label }) => {
                   const cap = caps[key] || {}
                   const choices: string[] = Array.isArray((cap as any).choices) ? (cap as any).choices : []
@@ -712,7 +712,7 @@ function CameraDeviceModal({ cam, onClose }: { cam: Camera; onClose: () => void 
               </span>
             </div>
           </div>
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:8 }}>
+          <div className="device-tele-grid">
             <DevTile label="SIM"             value={dev?.sim_signal_dbm  != null ? `${dev.sim_signal_dbm} dBm`   : '—'} sub={dev?.sim_operator || dev?.signal_label || '—'} bars={dev?.signal_bars ?? 0} />
             <DevTile label="Temp / Humidity" value={dev?.temperature_c   != null ? `${dev.temperature_c}°C`      : '—'} sub={dev?.humidity_percent != null ? `💧 ${dev.humidity_percent}%` : '—'} />
             <DevTile label={dev?.is_charging ? 'Battery ⚡' : 'Battery'} value={dev?.battery_percent != null ? `${dev.battery_percent}%` : '—'} sub={dev?.battery_voltage ? `${dev.battery_voltage} V` : '—'} />
@@ -989,7 +989,7 @@ function CameraInfoModal({ cam, onClose }: { cam: Camera; onClose: () => void })
   })
   const [copiedField, setCopiedField] = useState<string | null>(null)
 
-  const brokerHost = window.location.hostname || 'cloud.congnghetimelapse.com'
+  const brokerHost = window.location.hostname || 'localhost'
   const brokerPortTcp = '1883'
   const brokerPortWs = '8083'
   const pubTopic = `camera/${formData.code}/telemetry`
@@ -1137,7 +1137,7 @@ function CopyRow({ label, value, copyValue, fieldId, copiedField, onCopy, isCode
   const isCopied = copiedField === fieldId
 
   return (
-    <div style={{ display:'grid', gridTemplateColumns:'170px 1fr auto', alignItems:'center', gap:8, background:'var(--bg-secondary)', padding:'.4rem .65rem', borderRadius:6, border:'1px solid var(--border-color)' }}>
+    <div className="credential-row">
       <span style={{ fontSize:'.72rem', color:'var(--text-muted)', fontWeight:600 }}>{label}</span>
       <span style={{ fontSize:'.78rem', color:'var(--text-primary)', fontFamily: isCode?'monospace':'inherit', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
         {value}

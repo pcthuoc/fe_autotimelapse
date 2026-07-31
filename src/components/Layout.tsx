@@ -140,8 +140,8 @@ export default function Layout() {
              style={{ width:SIDEBAR_W, background:'var(--bg-sidebar)', borderRight:'1px solid var(--border-color)' }}>
         <NavContent/>
       </aside>
-      <main className="lg:ml-[220px] min-h-screen">
-        <div style={{ padding:'1.25rem 1.5rem', maxWidth:1440 }}>
+      <main className="lg:ml-[220px] min-h-screen w-full">
+        <div style={{ padding:'1.25rem 1.5rem', width:'100%' }}>
           <Outlet/>
         </div>
       </main>
