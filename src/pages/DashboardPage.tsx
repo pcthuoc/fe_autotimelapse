@@ -126,7 +126,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Stats row — thay đổi theo tầng quyền */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 12, marginBottom: 16 }}>
+      <div className="dash-stats-grid">
         {isSuperadmin && (
           <StatTile icon={<Building2 size={18} />} label="Clients" value={d?.total_clients ?? 0}
                     sub={`${d?.total_sites ?? 0} công trình`} color="#f59e0b" to="/clients" />
@@ -150,7 +150,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Middle: chart + downloads */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.6fr) minmax(280px, 1fr)', gap: 14, marginBottom: 16 }}>
+      <div className="dash-middle-grid">
         {/* Weekly chart */}
         <div style={{ border: '1px solid var(--border-color)', borderRadius: 14, background: 'var(--bg-secondary)', padding: '1rem 1.1rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
@@ -209,7 +209,7 @@ export default function DashboardPage() {
       </div>
       <div style={{ display: 'flex', gap: 12, marginBottom: 16, overflowX: 'auto', paddingBottom: 6, scrollSnapType: 'x proximity' }}>
         {sitesRecent.map(sd => (
-          <div key={sd.site.id} style={{ flex: '0 0 300px', maxWidth: 300, scrollSnapAlign: 'start', border: '1px solid var(--border-color)', borderRadius: 13, background: 'var(--bg-secondary)', overflow: 'hidden' }}>
+          <div key={sd.site.id} className="site-card-item" style={{ border: '1px solid var(--border-color)', borderRadius: 13, background: 'var(--bg-secondary)', overflow: 'hidden' }}>
             {/* Thumbnail strip */}
             <div style={{ height: 110, background: 'var(--bg-primary)', position: 'relative' }}>
               {sd.latest_thumb_url ? (

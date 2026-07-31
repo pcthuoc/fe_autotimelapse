@@ -153,7 +153,7 @@ export default function MediaGalleryPage() {
       </div>
 
       {/* Main layout: filter panel + gallery */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 200px', gap: 14, alignItems: 'start' }}>
+      <div className="gallery-main-layout">
 
         {/* LEFT: filter + gallery */}
         <div>
@@ -161,7 +161,7 @@ export default function MediaGalleryPage() {
           <div style={{ border: '1px solid var(--border-color)', borderRadius: 11, background: 'var(--bg-secondary)', padding: '.75rem .9rem', marginBottom: 12 }}>
 
             {/* Datetime range */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: 8, alignItems: 'end', marginBottom: 10 }}>
+            <div className="gallery-date-range">
               {/* From */}
               <div>
                 <div style={{ fontSize: '.65rem', color: 'var(--text-muted)', fontWeight: 600, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -249,7 +249,7 @@ export default function MediaGalleryPage() {
           {isLoading && <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>Đang tải…</div>}
 
           {/* Gallery grid */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 8 }}>
+          <div className="gallery-grid">
             {photos.map((photo) => {
               const sel = selected.has(photo.id)
               return (
@@ -297,12 +297,12 @@ export default function MediaGalleryPage() {
         </div>
 
         {/* RIGHT: day stats sidebar */}
-        <div style={{ position: 'sticky', top: 16 }}>
+        <div className="day-stats-sidebar">
           <div style={{ border: '1px solid var(--border-color)', borderRadius: 11, background: 'var(--bg-secondary)', overflow: 'hidden' }}>
             <div style={{ padding: '.6rem .75rem', borderBottom: '1px solid var(--border-color)', fontSize: '.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.05em', display: 'flex', alignItems: 'center', gap: 5 }}>
               <Calendar size={12} />Chọn nhanh theo ngày
             </div>
-            <div style={{ maxHeight: 500, overflowY: 'auto' }}>
+            <div className="day-stats-list">
               {(data?.day_stats ?? []).length === 0 && (
                 <div style={{ padding: '1rem', fontSize: '.75rem', color: 'var(--text-muted)', textAlign: 'center' }}>Không có dữ liệu</div>
               )}
