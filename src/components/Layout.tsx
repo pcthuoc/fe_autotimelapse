@@ -131,8 +131,15 @@ export default function Layout() {
     <div style={{ background:'var(--bg-primary)', minHeight:'100vh' }}>
       {/* Mobile topbar */}
       <div className="lg:hidden flex items-center gap-3 px-4 py-3 sticky top-0 z-50" style={{ background:'var(--bg-sidebar)', borderBottom:'1px solid var(--border-color)' }}>
-        <button onClick={()=>setMobileOpen(true)} style={{ background:'none', border:'none', cursor:'pointer', color:'var(--text-secondary)', display:'flex' }}><Menu size={20}/></button>
-        <span style={{ fontWeight:800, fontSize:'.9rem', color:'var(--text-primary)', flex:1 }}>AutoTimelapse</span>
+        <button onClick={()=>setMobileOpen(!mobileOpen)} style={{ background:'none', border:'none', cursor:'pointer', color:'var(--text-secondary)', display:'flex' }} title={mobileOpen ? "Đóng menu" : "Mở menu"}>
+          {mobileOpen ? <X size={20}/> : <Menu size={20}/>}
+        </button>
+        <NavLink to="/dashboard" onClick={()=>setMobileOpen(false)} style={{ display:'flex', alignItems:'center', gap:8, textDecoration:'none', color:'inherit', flex:1 }}>
+          <div style={{ width:26, height:26, background:'var(--accent)', borderRadius:7, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+            <Camera size={14} color="#fff" strokeWidth={2.5} />
+          </div>
+          <span style={{ fontWeight:800, fontSize:'.9rem', color:'var(--text-primary)' }}>AutoTimelapse</span>
+        </NavLink>
         <span style={{ fontSize:'.75rem', color:'var(--text-muted)' }}>{user?.username}</span>
       </div>
       {mobileOpen && <div className="fixed inset-0 z-40 lg:hidden" style={{ background:'rgba(0,0,0,.75)' }} onClick={()=>setMobileOpen(false)}/>}
