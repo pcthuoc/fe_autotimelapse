@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import {
   getCameras, getCameraDevice, getCameraSettings, getLiveLatest,
-  updateCamera, createCamera, updateCameraDevice,
+  updateCamera, createCamera, updateCameraDevice, deleteCamera,
   getSites, createSite, searchUsers, regenerateCredential,
   getCameraMqttStatus, registerCameraMqtt, powerOnCM4, powerOffCM4,
 } from '../api/client'
@@ -12,7 +12,7 @@ import { useAuth } from '../contexts/AuthContext'
 import {
   Search, Camera as CameraIcon, Wifi, WifiOff,
   X, Plus, RefreshCw, Settings, Building2, Clock, Image as ImageIcon, Shield,
-  ChevronDown, ChevronRight, Wifi as WifiOn, LayoutGrid, Info, Copy, Check, Key,
+  ChevronDown, ChevronRight, Wifi as WifiOn, LayoutGrid, Info, Copy, Check, Key, Trash2,
 } from 'lucide-react'
 
 /* ── util ── */
@@ -495,6 +495,24 @@ function CameraDeviceModal({ cam, onClose }: { cam: Camera; onClose: () => void 
     }
   }
 
+  const deleteMutation = useMutation({
+    mutationFn: () => deleteCamera(cam.id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['cameras'] })
+      showToast(`Đã xóa camera ${cam.code}`)
+      onClose()
+    },
+    onError: (err: any) => {
+      showToast(err?.response?.data?.detail || 'Không thể xóa camera', 'error')
+    }
+  })
+
+  const handleDeleteCamera = () => {
+    if (window.confirm(`⚠️ XÁC NHẬN XÓA CAMERA "${cam.name}" (${cam.code})?\n\nThao tác này sẽ xóa toàn bộ dữ liệu & cấu hình camera khỏi hệ thống và không thể hoàn tác.`)) {
+      deleteMutation.mutate()
+    }
+  }
+
   /* ── computed ── */
   const caps = ((camSettings as any)?.capabilities || {}) as Record<string, {choices?: string[]; writable?: boolean}>
   const applied = ((camSettings as any)?.applied || {}) as Record<string, string>
@@ -529,7 +547,19 @@ function CameraDeviceModal({ cam, onClose }: { cam: Camera; onClose: () => void 
               )
             })()}
           </div>
-          <button onClick={onClose} className="atl-btn ghost" style={{ padding:'4px 8px', marginLeft:'auto' }}><X size={18}/></button>
+          <div style={{ display:'flex', alignItems:'center', gap:6, marginLeft:'auto' }}>
+            <button
+              onClick={handleDeleteCamera}
+              className="atl-btn ghost"
+              style={{ padding:'4px 8px', color:'#ef4444', borderColor:'rgba(239,68,68,.3)', fontSize:'.72rem' }}
+              disabled={deleteMutation.isPending}
+              title="Xóa camera này khỏi hệ thống"
+            >
+              <Trash2 size={14} style={{ marginRight:3 }} />
+              {deleteMutation.isPending ? 'Đang xóa…' : 'Xóa camera'}
+            </button>
+            <button onClick={onClose} className="atl-btn ghost" style={{ padding:'4px 8px' }}><X size={18}/></button>
+          </div>
         </div>
 
         {/* ── Body grid ── */}
@@ -1027,6 +1057,24 @@ function CameraInfoModal({ cam, onClose }: { cam: Camera; onClose: () => void })
     camera_model: formData.camera_model
   }, null, 2)
 
+  const deleteMutation = useMutation({
+    mutationFn: () => deleteCamera(cam.id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['cameras'] })
+      showToast(`Đã xóa camera ${cam.code}`)
+      onClose()
+    },
+    onError: (err: any) => {
+      showToast(err?.response?.data?.detail || 'Không thể xóa camera', 'error')
+    }
+  })
+
+  const handleDeleteCamera = () => {
+    if (window.confirm(`⚠️ XÁC NHẬN XÓA CAMERA "${cam.name}" (${cam.code})?\n\nThao tác này sẽ xóa toàn bộ dữ liệu & cấu hình camera khỏi hệ thống và không thể hoàn tác.`)) {
+      deleteMutation.mutate()
+    }
+  }
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-box" style={{ maxWidth: 740 }} onClick={e => e.stopPropagation()}>
@@ -1114,9 +1162,20 @@ function CameraInfoModal({ cam, onClose }: { cam: Camera; onClose: () => void })
         </div>
 
         <div className="modal-footer" style={{ justifyContent:'space-between' }}>
-          <Link to={`/cameras/${cam.id}/live`} className="atl-btn" style={{ fontSize:'.75rem' }} onClick={onClose}>
-            <Wifi size={13}/> Xem Live Video
-          </Link>
+          <div style={{ display:'flex', gap:8, alignItems:'center', flexWrap:'wrap' }}>
+            <Link to={`/cameras/${cam.id}/live`} className="atl-btn" style={{ fontSize:'.75rem' }} onClick={onClose}>
+              <Wifi size={13}/> Xem Live Video
+            </Link>
+            <button
+              className="atl-btn ghost"
+              style={{ fontSize:'.75rem', color:'#ef4444', borderColor:'rgba(239,68,68,.3)' }}
+              disabled={deleteMutation.isPending}
+              onClick={handleDeleteCamera}
+            >
+              <Trash2 size={13} style={{ marginRight:4 }} />
+              {deleteMutation.isPending ? 'Đang xóa…' : 'Xóa Camera'}
+            </button>
+          </div>
           <button className="atl-btn" onClick={onClose}>Đóng</button>
         </div>
       </div>
