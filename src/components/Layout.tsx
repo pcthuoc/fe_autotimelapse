@@ -21,7 +21,7 @@ const adminItems = [
   { to: '/settings', icon: Bell,  label: 'Alert Settings', color: '#fb923c', roles: ['superadmin','admin'] },
 ]
 
-const SIDEBAR_W = 220
+const SIDEBAR_W = 230
 
 export default function Layout() {
   const { mode, toggle } = useTheme()
@@ -147,7 +147,7 @@ export default function Layout() {
              style={{ width:SIDEBAR_W, background:'var(--bg-sidebar)', borderRight:'1px solid var(--border-color)' }}>
         <NavContent/>
       </aside>
-      <main className="lg:ml-[220px] min-h-screen w-full lg:w-[calc(100%-220px)] min-w-0 max-w-full box-border">
+      <main className="lg:ml-[230px] min-h-screen w-full lg:w-[calc(100%-230px)] min-w-0 max-w-full box-border">
         <div style={{ padding:'1.25rem 1.5rem', width:'100%', boxSizing:'border-box' }}>
           <Outlet/>
         </div>
