@@ -128,7 +128,7 @@ export default function Layout() {
   )
 
   return (
-    <div style={{ background:'var(--bg-primary)', minHeight:'100vh' }}>
+    <div style={{ background:'var(--bg-primary)', minHeight:'100vh', overflowX:'hidden', maxWidth:'100vw' }}>
       {/* Mobile topbar */}
       <div className="lg:hidden flex items-center gap-3 px-4 py-3 sticky top-0 z-50" style={{ background:'var(--bg-sidebar)', borderBottom:'1px solid var(--border-color)' }}>
         <button onClick={()=>setMobileOpen(!mobileOpen)} style={{ background:'none', border:'none', cursor:'pointer', color:'var(--text-secondary)', display:'flex' }} title={mobileOpen ? "Đóng menu" : "Mở menu"}>
@@ -147,8 +147,8 @@ export default function Layout() {
              style={{ width:SIDEBAR_W, background:'var(--bg-sidebar)', borderRight:'1px solid var(--border-color)' }}>
         <NavContent/>
       </aside>
-      <main className="lg:ml-[220px] min-h-screen w-full">
-        <div style={{ padding:'1.25rem 1.5rem', width:'100%' }}>
+      <main className="lg:ml-[220px] min-h-screen w-full lg:w-[calc(100%-220px)] min-w-0 max-w-full box-border">
+        <div style={{ padding:'1.25rem 1.5rem', width:'100%', boxSizing:'border-box' }}>
           <Outlet/>
         </div>
       </main>
