@@ -90,6 +90,10 @@ export const getSites = () => api.get('/sites/')
 
 export const createSite = (data: Record<string, unknown>) => api.post('/sites/', data)
 
+export const updateSite = (pk: string, data: Record<string, unknown>) => api.patch(`/sites/${pk}/`, data)
+
+export const deleteSite = (pk: string) => api.delete(`/sites/${pk}/`)
+
 // ── Media ─────────────────────────────────────────────
 export const getMediaGallery = (cameraPk: string, params?: Record<string, string>) =>
   api.get(`/media/camera/${cameraPk}/`, { params })
