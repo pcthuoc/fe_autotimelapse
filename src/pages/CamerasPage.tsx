@@ -748,18 +748,6 @@ function CameraDeviceModal({ cam, onClose }: { cam: Camera; onClose: () => void 
             <DevTile label={dev?.is_charging ? 'Battery ⚡' : 'Battery'} value={dev?.battery_percent != null ? `${dev.battery_percent}%` : '—'} sub={dev?.battery_voltage ? `${dev.battery_voltage} V` : '—'} />
             <DevTile label="Solar"           value={dev?.solar_voltage   != null ? `${dev.solar_voltage} V`      : '—'} sub={dev?.solar_percent != null ? `${dev.solar_percent}%` : '—'} />
           </div>
-          {Array.isArray(dev?.cell_voltages) && dev.cell_voltages.length > 0 && (
-            <div style={{ marginTop:8 }}>
-              <div className="section-label" style={{ fontSize:'.58rem', marginBottom:5 }}>CELL VOLTAGES</div>
-              <div style={{ display:'flex', flexWrap:'wrap', gap:5 }}>
-                {dev.cell_voltages.map((v: number, i: number) => (
-                  <span key={i} style={{ background:'var(--bg-tertiary)', border:'1px solid var(--border-color)', borderRadius:5, padding:'2px 8px', fontSize:'.72rem' }}>
-                    {i+1}: {v}V
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
       </div>
     </div>
