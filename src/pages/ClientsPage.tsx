@@ -143,14 +143,11 @@ export default function ClientsPage() {
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18, flexWrap: 'wrap', gap: 10 }}>
         <div>
-          <h1 style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>Clients</h1>
-          <p style={{ fontSize: '.78rem', color: 'var(--text-secondary)', margin: '4px 0 0' }}>
-            Khách hàng / chủ đầu tư — liên kết với công trình và camera
-          </p>
+          <h1 style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>Khách hàng</h1>
         </div>
         {isSuperadmin && (
           <button className="atl-btn primary" style={{ fontSize: '.8rem' }} onClick={openAdd}>
-            <Plus size={14} style={{ marginRight: 5 }} />Thêm client
+            <Plus size={14} style={{ marginRight: 5 }} />Thêm khách hàng
           </button>
         )}
       </div>

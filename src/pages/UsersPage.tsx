@@ -81,13 +81,12 @@ export default function UsersPage() {
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18, flexWrap: 'wrap', gap: 10 }}>
         <div>
-          <h1 style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>Users</h1>
-          <p style={{ fontSize: '.78rem', color: 'var(--text-secondary)', margin: '4px 0 0' }}>Quản lý tài khoản và vai trò</p>
+          <h1 style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>Quản lý Tài khoản</h1>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <input className="atl-input" placeholder="Tìm username/email…" value={q} onChange={e => setQ(e.target.value)} style={{ width: 200 }} />
           <button className="atl-btn primary" style={{ fontSize: '.8rem' }} onClick={() => { setForm(EMPTY); setError(''); setModal(true) }}>
-            <Plus size={14} style={{ marginRight: 5 }} />Thêm user
+            <Plus size={14} style={{ marginRight: 5 }} />Thêm tài khoản
           </button>
         </div>
       </div>
@@ -98,7 +97,7 @@ export default function UsersPage() {
           <table style={{ width: '100%', fontSize: '.82rem', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border-color)', background: 'var(--bg-primary)' }}>
-                {['User', 'Email', 'Vai trò', 'Quyền', 'Trạng thái', ''].map(h => (
+                {['Tài khoản', 'Email', 'Vai trò', 'Quyền', 'Trạng thái', ''].map(h => (
                   <th key={h} style={{ padding: '.65rem .9rem', textAlign: 'left', fontSize: '.68rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: 'var(--text-secondary)' }}>{h}</th>
                 ))}
               </tr>

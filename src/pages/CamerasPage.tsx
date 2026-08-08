@@ -9,6 +9,7 @@ import {
 } from '../api/client'
 import type { Camera, Site } from '../api/types'
 import { useAuth } from '../contexts/AuthContext'
+import CameraLiveModal from '../components/CameraLiveModal'
 import {
   Search, Camera as CameraIcon, Wifi, WifiOff,
   X, Plus, RefreshCw, Settings, Building2, Clock, Image as ImageIcon, Shield,
@@ -70,6 +71,7 @@ function showToast(msg: string, type: 'success'|'error' = 'success') {
 const CAMERA_MODELS = [
   { v: 'nikon_d5300', label: 'Nikon D5300' },
   { v: 'nikon_d3500', label: 'Nikon D3500' },
+  { v: 'nikon_d7100', label: 'Nikon D7100' },
   { v: 'nikon_d7500', label: 'Nikon D7500' },
   { v: 'nikon_z50',   label: 'Nikon Z50' },
   { v: 'canon_200d',  label: 'Canon EOS 200D' },
@@ -231,6 +233,51 @@ function CredentialInline({ camId }: { camId: string }) {
   )
 }
 
+export function calcLFPPercent(v: number | null | undefined, rawPct?: number | null): { pct: number | null; label: string } {
+  if (v == null || v <= 0) {
+    return { pct: rawPct ?? null, label: 'Pin' }
+  }
+
+  // Nếu điện áp > 11.0V: Khối Pin 4S LiFePO4 (12.8V nominal, 14.4V max)
+  if (v > 11.0) {
+    let pct: number
+    if (v >= 13.6) {
+      pct = 100
+    } else if (v >= 13.3) {
+      pct = Math.round(85 + ((v - 13.3) / 0.3) * 15)
+    } else if (v >= 13.0) {
+      pct = Math.round(50 + ((v - 13.0) / 0.3) * 35)
+    } else if (v >= 12.5) {
+      pct = Math.round(20 + ((v - 12.5) / 0.5) * 30)
+    } else if (v >= 11.8) {
+      pct = Math.round(5 + ((v - 11.8) / 0.7) * 15)
+    } else if (v >= 11.2) {
+      pct = Math.round(1 + ((v - 11.2) / 0.6) * 4)
+    } else {
+      // Dưới 11.2V (ví dụ 11.13V) = cạn sạch 0% (ngắt 2.8V / cell)
+      pct = 0
+    }
+    return { pct, label: 'Pin (4S LFP)' }
+  }
+
+  // Nếu điện áp <= 11.0V: Khối Pin 3S LiFePO4 (9.6V nominal, 10.8V max)
+  let pct: number
+  if (v >= 10.5) {
+    pct = 100
+  } else if (v >= 10.0) {
+    pct = Math.round(80 + ((v - 10.0) / 0.5) * 20)
+  } else if (v >= 9.6) {
+    pct = Math.round(30 + ((v - 9.6) / 0.4) * 50)
+  } else if (v >= 9.0) {
+    pct = Math.round(5 + ((v - 9.0) / 0.6) * 25)
+  } else if (v >= 8.4) {
+    pct = Math.round(1 + ((v - 8.4) / 0.6) * 4)
+  } else {
+    pct = 0
+  }
+  return { pct, label: 'Pin (3S LFP)' }
+}
+
 function DevTile({ label, value, sub, bars }: { label: string; value: string; sub: string; bars?: number|null }) {  return (
     <div style={{ border:'1px solid var(--border-color)', borderRadius:8, padding:'.55rem .7rem', background:'var(--bg-primary)' }}>
       <div style={{ display:'flex', alignItems:'center', gap:5, marginBottom:3 }}>
@@ -244,12 +291,13 @@ function DevTile({ label, value, sub, bars }: { label: string; value: string; su
         <span style={{ fontSize:'.6rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'.06em' }}>{label}</span>
       </div>
       <div style={{ fontSize:'.88rem', fontWeight:700 }}>{value}</div>
-      <div style={{ fontSize:'.7rem', color:'var(--text-muted)', marginTop:1 }}>{sub}</div>
+      {sub ? <div style={{ fontSize:'.7rem', color:'var(--text-muted)', marginTop:1 }}>{sub}</div> : null}
     </div>
   )
 }
 
-function CameraDeviceModal({ cam, onClose }: { cam: Camera; onClose: () => void }) {
+function CameraDeviceModal({ cam, onClose, canManage = true }: { cam: Camera; onClose: () => void; canManage?: boolean }) {
+  if (!canManage) return null
   const qc = useQueryClient()
 
   /* ── live view ── */
@@ -301,7 +349,7 @@ function CameraDeviceModal({ cam, onClose }: { cam: Camera; onClose: () => void 
   const { data: deviceData } = useQuery({
     queryKey: ['device', cam.id],
     queryFn: () => getCameraDevice(cam.id).then(r => r.data),
-    refetchInterval: 15_000,
+    refetchInterval: 30_000,
   })
   const dev = deviceData as any
 
@@ -535,7 +583,7 @@ function CameraDeviceModal({ cam, onClose }: { cam: Camera; onClose: () => void 
                 {cam.camera_model.replace(/_/g,' ').toUpperCase()}
               </span>
             )}
-            <MqttStatusBadge camId={cam.id} camCode={cam.code} />
+            {canManage && <MqttStatusBadge camId={cam.id} camCode={cam.code} />}
             {/* CM4 Power Badge */}
             {(() => {
               const color = isCM4Running ? '#10b981' : cm4State === 'powering_on' ? '#f59e0b' : cm4State === 'shutting_down' ? '#ef4444' : '#6b7280'
@@ -548,16 +596,18 @@ function CameraDeviceModal({ cam, onClose }: { cam: Camera; onClose: () => void 
             })()}
           </div>
           <div style={{ display:'flex', alignItems:'center', gap:6, marginLeft:'auto' }}>
-            <button
-              onClick={handleDeleteCamera}
-              className="atl-btn ghost"
-              style={{ padding:'4px 8px', color:'#ef4444', borderColor:'rgba(239,68,68,.3)', fontSize:'.72rem' }}
-              disabled={deleteMutation.isPending}
-              title="Xóa camera này khỏi hệ thống"
-            >
-              <Trash2 size={14} style={{ marginRight:3 }} />
-              {deleteMutation.isPending ? 'Đang xóa…' : 'Xóa camera'}
-            </button>
+            {canManage && (
+              <button
+                onClick={handleDeleteCamera}
+                className="atl-btn ghost"
+                style={{ padding:'4px 8px', color:'#ef4444', borderColor:'rgba(239,68,68,.3)', fontSize:'.72rem' }}
+                disabled={deleteMutation.isPending}
+                title="Xóa camera này khỏi hệ thống"
+              >
+                <Trash2 size={14} style={{ marginRight:3 }} />
+                {deleteMutation.isPending ? 'Đang xóa…' : 'Xóa camera'}
+              </button>
+            )}
             <button onClick={onClose} className="atl-btn ghost" style={{ padding:'4px 8px' }}><X size={18}/></button>
           </div>
         </div>
@@ -565,8 +615,8 @@ function CameraDeviceModal({ cam, onClose }: { cam: Camera; onClose: () => void 
         {/* ── Body grid ── */}
         <div className="modal-body cam-modal-grid">
 
-          {/* Banner CM4 Power & Auto-Cycle Management */}
-          <div className="cm4-power-banner" style={{ background: isCM4Running ? 'rgba(16,185,129,.1)' : 'rgba(245,158,11,.12)', border: `1px solid ${isCM4Running ? 'rgba(16,185,129,.3)' : 'rgba(245,158,11,.3)'}` }}>
+          {/* Banner CM4 Power & Auto-Cycle Management — admin only */}
+          {canManage && <div className="cm4-power-banner" style={{ background: isCM4Running ? 'rgba(16,185,129,.1)' : 'rgba(245,158,11,.12)', border: `1px solid ${isCM4Running ? 'rgba(16,185,129,.3)' : 'rgba(245,158,11,.3)'}` }}>
             <div style={{ fontSize:'.78rem', color: isCM4Running ? '#10b981' : '#f59e0b' }}>
               <strong>⚡ Nguồn lõi CM4: {isCM4Running ? 'Đang bật (Cưỡng bức)' : cm4State === 'powering_on' ? 'Đang bật...' : cm4State === 'shutting_down' ? 'Đang tắt...' : 'Đang ngủ (Theo chu kỳ ESP32)'}</strong>
               <div style={{ fontSize:'.72rem', color:'var(--text-muted)', marginTop:2 }}>
@@ -584,7 +634,7 @@ function CameraDeviceModal({ cam, onClose }: { cam: Camera; onClose: () => void 
                 {poweringCM4 || cm4State === 'powering_on' ? '⚡ Đang bật...' : '⚡ Cưỡng bức Bật CM4'}
               </button>
             )}
-          </div>
+          </div>}
 
           {/* LEFT: photo + controls */}
           <div>
@@ -626,10 +676,53 @@ function CameraDeviceModal({ cam, onClose }: { cam: Camera; onClose: () => void 
                 <span>Total: <strong style={{ color:'var(--text-primary)' }}>{totalCount ?? '—'}</strong></span>
               </div>
             )}
+
+            {/* ── Device Telemetry under Video Live ── */}
+            <div style={{ marginTop: 12, borderTop: '1px solid var(--border-color)', paddingTop: 10 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <span className="section-label" style={{ margin: 0, fontSize: '.65rem' }}>DEVICE TELEMETRY</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <CredentialInline camId={cam.id} />
+                  <span style={{ fontSize: '.72rem', color: cam.is_online ? 'var(--status-ok)' : 'var(--text-muted)' }}>
+                    {cam.is_online ? '● Online' : '○ Offline'}
+                  </span>
+                </div>
+              </div>
+
+              {(() => {
+                const battV = dev?.battery_voltage ? parseFloat(dev.battery_voltage) : null
+                const { pct: battPct, label: battLabel } = calcLFPPercent(battV, dev?.battery_percent)
+                return (
+                  <div className="device-tele-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
+                    <DevTile
+                      label="SIM"
+                      value={dev?.sim_signal_dbm != null ? `${dev.sim_signal_dbm} dBm` : '—'}
+                      sub={dev?.sim_operator || dev?.signal_label || '—'}
+                      bars={dev?.signal_bars ?? 0}
+                    />
+                    <DevTile
+                      label="Nhiệt độ / Độ ẩm"
+                      value={dev?.temperature_c != null ? `${dev.temperature_c}°C` : '—'}
+                      sub={dev?.humidity_percent != null ? `💧 ${dev.humidity_percent}%` : '—'}
+                    />
+                    <DevTile
+                      label={dev?.is_charging ? `${battLabel} ⚡` : battLabel}
+                      value={battPct != null ? `${battPct}%` : '—'}
+                      sub={battV != null ? `${battV} V` : '—'}
+                    />
+                    <DevTile
+                      label="Solar"
+                      value={dev?.solar_voltage != null ? `${dev.solar_voltage} V` : '—'}
+                      sub=""
+                    />
+                  </div>
+                )
+              })()}
+            </div>
           </div>
 
-          {/* RIGHT: SIM + settings + camera settings */}
-          <div style={{ display:'flex', flexDirection:'column', gap:12, minWidth:0 }}>
+          {/* RIGHT: SIM + settings + camera settings — admin only */}
+          {canManage && <div style={{ display:'flex', flexDirection:'column', gap:12, minWidth:0 }}>
 
             {/* SIM info + device settings */}
             <div className="device-settings-grid">
@@ -728,26 +821,7 @@ function CameraDeviceModal({ cam, onClose }: { cam: Camera; onClose: () => void 
                 </button>
               </div>
             </div>
-          </div>
-        </div>
-
-        {/* ── Device telemetry tiles ── */}
-        <div style={{ borderTop:'1px solid var(--border-color)', padding:'.7rem 1rem' }}>
-          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:7 }}>
-            <span className="section-label" style={{ margin:0, fontSize:'.6rem' }}>DEVICE</span>
-            <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-              <CredentialInline camId={cam.id} />
-              <span style={{ fontSize:'.72rem', color: cam.is_online?'var(--status-ok)':'var(--text-muted)' }}>
-                {cam.is_online ? '● Online' : '○ Offline'}
-              </span>
-            </div>
-          </div>
-          <div className="device-tele-grid">
-            <DevTile label="SIM"             value={dev?.sim_signal_dbm  != null ? `${dev.sim_signal_dbm} dBm`   : '—'} sub={dev?.sim_operator || dev?.signal_label || '—'} bars={dev?.signal_bars ?? 0} />
-            <DevTile label="Temp / Humidity" value={dev?.temperature_c   != null ? `${dev.temperature_c}°C`      : '—'} sub={dev?.humidity_percent != null ? `💧 ${dev.humidity_percent}%` : '—'} />
-            <DevTile label={dev?.is_charging ? 'Battery ⚡' : 'Battery'} value={dev?.battery_percent != null ? `${dev.battery_percent}%` : '—'} sub={dev?.battery_voltage ? `${dev.battery_voltage} V` : '—'} />
-            <DevTile label="Solar"           value={dev?.solar_voltage   != null ? `${dev.solar_voltage} V`      : '—'} sub={dev?.solar_percent != null ? `${dev.solar_percent}%` : '—'} />
-          </div>
+          </div>}
         </div>
       </div>
     </div>
@@ -953,9 +1027,12 @@ function AddCameraModal({ onClose }: { onClose: () => void }) {
                 <select className="atl-select" value={form.camera_model} onChange={e=>setForm(f=>({...f,camera_model:e.target.value}))}>
                   <option value="nikon_d5300">Nikon D5300</option>
                   <option value="nikon_d3500">Nikon D3500</option>
+                  <option value="nikon_d7100">Nikon D7100</option>
                   <option value="nikon_d7500">Nikon D7500</option>
-                  <option value="canon_eos">Canon EOS</option>
-                  <option value="generic">Generic</option>
+                  <option value="nikon_z50">Nikon Z50</option>
+                  <option value="canon_200d">Canon EOS 200D</option>
+                  <option value="canon_90d">Canon EOS 90D</option>
+                  <option value="generic">Generic (khác)</option>
                 </select>
               </div>
               <div className="form-group">
@@ -969,13 +1046,13 @@ function AddCameraModal({ onClose }: { onClose: () => void }) {
             </div>
             <div className="form-group">
               <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:4 }}>
-                <label className="form-label" style={{ margin:0 }}>Công trình (Site)</label>
+                <label className="form-label" style={{ margin:0 }}>Công trình</label>
                 <button className="atl-btn ghost" style={{ fontSize:'.7rem', padding:'2px 6px' }} onClick={()=>setShowAddSite(true)}>
                   <Plus size={11}/> Tạo mới
                 </button>
               </div>
               <select className="atl-select" value={form.site_id} onChange={e=>setForm(f=>({...f,site_id:e.target.value}))}>
-                <option value="">— Chưa gán site —</option>
+                <option value="">— Chưa chọn công trình —</option>
                 {sites.map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
             </div>
@@ -995,7 +1072,7 @@ function AddCameraModal({ onClose }: { onClose: () => void }) {
 /* ════════════════════════════════════════════
    CAMERA INFO & MQTT MODAL
    ════════════════════════════════════════════ */
-function CameraInfoModal({ cam, onClose }: { cam: Camera; onClose: () => void }) {
+function CameraInfoModal({ cam, onClose, onOpenLive, canManage = false }: { cam: Camera; onClose: () => void; onOpenLive?: () => void; canManage?: boolean }) {
   const qc = useQueryClient()
   const [formData, setFormData] = useState({
     name: cam.name || '',
@@ -1010,8 +1087,8 @@ function CameraInfoModal({ cam, onClose }: { cam: Camera; onClose: () => void })
   const brokerHost = window.location.hostname || 'localhost'
   const brokerPortTcp = '1883'
   const brokerPortWs = '8083'
-  const pubTopic = `camera/${formData.code}/telemetry`
-  const subTopic = `camera/${formData.code}/command`
+  const pubTopic = `camera/${formData.code}/data`   // also: /status  /ack
+  const subTopic = `camera/${formData.code}/cmd`
 
   const handleCopy = (text: string, fieldName: string) => {
     navigator.clipboard.writeText(text)
@@ -1039,7 +1116,7 @@ function CameraInfoModal({ cam, onClose }: { cam: Camera; onClose: () => void })
     client_id: formData.code,
     username: formData.code,
     password: formData.mqtt_password,
-    publish_topic: pubTopic,
+    publish_topics: [`camera/${formData.code}/data`, `camera/${formData.code}/status`, `camera/${formData.code}/ack`],
     subscribe_topic: subTopic,
     camera_name: formData.name,
     camera_model: formData.camera_model
@@ -1075,94 +1152,121 @@ function CameraInfoModal({ cam, onClose }: { cam: Camera; onClose: () => void })
         </div>
 
         <div className="modal-body" style={{ display:'flex', flexDirection:'column', gap:'1.25rem' }}>
-          {/* Section 1: Edit Camera Parameters */}
+          {/* Section 1: Camera Information / Edit */}
           <div style={{ background:'var(--bg-primary)', border:'1px solid var(--border-color)', borderRadius:10, padding:'1rem' }}>
             <div style={{ fontSize:'.75rem', fontWeight:700, color:'var(--accent-light)', marginBottom:'.75rem', textTransform:'uppercase', letterSpacing:'.05em', display:'flex', alignItems:'center', gap:6 }}>
-              <Settings size={14} /> Chỉnh sửa thông số Camera
+              <Settings size={14} /> {canManage ? 'Chỉnh sửa thông số Camera' : 'Thông tin Camera'}
             </div>
 
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'.75rem' }}>
-              <div>
-                <label className="form-label">Tên Camera</label>
-                <input className="atl-input" style={{ width:'100%' }} value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+            {canManage ? (
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'.75rem' }}>
+                <div>
+                  <label className="form-label">Tên Camera</label>
+                  <input className="atl-input" style={{ width:'100%' }} value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+                </div>
+                <div>
+                  <label className="form-label">Mã Camera / Username MQTT</label>
+                  <input className="atl-input" style={{ width:'100%', fontFamily:'monospace' }} value={formData.code} onChange={e => setFormData({...formData, code: e.target.value})} />
+                </div>
+                <div>
+                  <label className="form-label">Mật khẩu MQTT (Password)</label>
+                  <input className="atl-input" style={{ width:'100%', fontFamily:'monospace' }} value={formData.mqtt_password} onChange={e => setFormData({...formData, mqtt_password: e.target.value})} placeholder="Nhập password MQTT..." />
+                </div>
+                <div>
+                  <label className="form-label">Trạng thái</label>
+                  <select className="atl-input" style={{ width:'100%' }} value={formData.status} onChange={e => setFormData({...formData, status: e.target.value as any})}>
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                    <option value="maintenance">Maintenance</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="form-label">Dòng máy (Model)</label>
+                  <select className="atl-input" style={{ width:'100%' }} value={formData.camera_model} onChange={e => setFormData({...formData, camera_model: e.target.value})}>
+                    <option value="generic">Generic (khác)</option>
+                    <option value="nikon_d5300">Nikon D5300</option>
+                    <option value="nikon_d3500">Nikon D3500</option>
+                    <option value="nikon_d7100">Nikon D7100</option>
+                    <option value="nikon_d7500">Nikon D7500</option>
+                    <option value="nikon_z50">Nikon Z50</option>
+                    <option value="canon_200d">Canon 200D</option>
+                    <option value="canon_90d">Canon 90D</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="form-label">Múi giờ (Timezone)</label>
+                  <input className="atl-input" style={{ width:'100%' }} value={formData.timezone} onChange={e => setFormData({...formData, timezone: e.target.value})} />
+                </div>
               </div>
-              <div>
-                <label className="form-label">Mã Camera / Username MQTT</label>
-                <input className="atl-input" style={{ width:'100%', fontFamily:'monospace' }} value={formData.code} onChange={e => setFormData({...formData, code: e.target.value})} />
-              </div>
-              <div>
-                <label className="form-label">Mật khẩu MQTT (Password)</label>
-                <input className="atl-input" style={{ width:'100%', fontFamily:'monospace' }} value={formData.mqtt_password} onChange={e => setFormData({...formData, mqtt_password: e.target.value})} placeholder="Nhập password MQTT..." />
-              </div>
-              <div>
-                <label className="form-label">Trạng thái</label>
-                <select className="atl-input" style={{ width:'100%' }} value={formData.status} onChange={e => setFormData({...formData, status: e.target.value as any})}>
-                  <option value="active">Active</option>
-                  <option value="inactive">Inactive</option>
-                  <option value="maintenance">Maintenance</option>
-                </select>
-              </div>
-              <div>
-                <label className="form-label">Dòng máy (Model)</label>
-                <select className="atl-input" style={{ width:'100%' }} value={formData.camera_model} onChange={e => setFormData({...formData, camera_model: e.target.value})}>
-                  <option value="generic">Generic (khác)</option>
-                  <option value="nikon_d5300">Nikon D5300</option>
-                  <option value="nikon_d3500">Nikon D3500</option>
-                  <option value="nikon_d7500">Nikon D7500</option>
-                  <option value="nikon_z50">Nikon Z50</option>
-                  <option value="canon_200d">Canon 200D</option>
-                  <option value="canon_90d">Canon 90D</option>
-                </select>
-              </div>
-              <div>
-                <label className="form-label">Múi giờ (Timezone)</label>
-                <input className="atl-input" style={{ width:'100%' }} value={formData.timezone} onChange={e => setFormData({...formData, timezone: e.target.value})} />
-              </div>
-            </div>
+            ) : (
+              <table style={{ width: '100%', fontSize: '.8rem', borderCollapse: 'collapse' }}>
+                <tbody>
+                  {[
+                    ['Tên camera', cam.name],
+                    ['Mã camera', cam.code],
+                    ['Công trình', cam.site?.name || '—'],
+                    ['Trạng thái', cam.status.toUpperCase()],
+                    ['Dòng máy', (cam.camera_model || 'generic').replace(/_/g, ' ').toUpperCase()],
+                    ['Múi giờ', cam.timezone],
+                  ].map(([k, v]) => (
+                    <tr key={k} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                      <td style={{ padding: '6px 0', color: 'var(--text-muted)', fontWeight: 600, width: '35%' }}>{k}</td>
+                      <td style={{ padding: '6px 0', color: 'var(--text-primary)', fontWeight: 700 }}>{v}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
 
-            <div style={{ display:'flex', justifyContent:'flex-end', marginTop:'1rem' }}>
-              <button className="atl-btn primary" onClick={() => updateMutation.mutate()} disabled={updateMutation.isPending}>
-                {updateMutation.isPending ? 'Đang lưu...' : 'Lưu thông số'}
-              </button>
-            </div>
+            {canManage && (
+              <div style={{ display:'flex', justifyContent:'flex-end', marginTop:'1rem' }}>
+                <button className="atl-btn primary" onClick={() => updateMutation.mutate()} disabled={updateMutation.isPending}>
+                  {updateMutation.isPending ? 'Đang lưu...' : 'Lưu thông số'}
+                </button>
+              </div>
+            )}
           </div>
 
-          {/* Section 2: MQTT Copy Credentials */}
-          <div style={{ background:'var(--bg-primary)', border:'1px solid var(--border-color)', borderRadius:10, padding:'1rem' }}>
-            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'.75rem' }}>
-              <div style={{ fontSize:'.75rem', fontWeight:700, color:'var(--status-ok)', textTransform:'uppercase', letterSpacing:'.05em', display:'flex', alignItems:'center', gap:6 }}>
-                <Key size={14} /> Thông số kết nối MQTT (Sao chép nhanh)
+          {/* Section 2: MQTT Copy Credentials (Admin only) */}
+          {canManage && (
+            <div style={{ background:'var(--bg-primary)', border:'1px solid var(--border-color)', borderRadius:10, padding:'1rem' }}>
+              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'.75rem' }}>
+                <div style={{ fontSize:'.75rem', fontWeight:700, color:'var(--status-ok)', textTransform:'uppercase', letterSpacing:'.05em', display:'flex', alignItems:'center', gap:6 }}>
+                  <Key size={14} /> Thông số kết nối MQTT (Sao chép nhanh)
+                </div>
+                <button className="atl-btn ghost" style={{ fontSize:'.72rem' }} onClick={() => handleCopy(fullJson, 'JSON MQTT Full')}>
+                  {copiedField==='JSON MQTT Full' ? <Check size={12} style={{ color:'var(--status-ok)' }} /> : <Copy size={12}/>} Copy tất cả (JSON)
+                </button>
               </div>
-              <button className="atl-btn ghost" style={{ fontSize:'.72rem' }} onClick={() => handleCopy(fullJson, 'JSON MQTT Full')}>
-                {copiedField==='JSON MQTT Full' ? <Check size={12} style={{ color:'var(--status-ok)' }} /> : <Copy size={12}/>} Copy tất cả (JSON)
-              </button>
-            </div>
 
-            <div style={{ display:'flex', flexDirection:'column', gap:'.5rem' }}>
-              <CopyRow label="MQTT Broker Host" value={brokerHost} fieldId="Host MQTT" copiedField={copiedField} onCopy={handleCopy} />
-              <CopyRow label="Port (TCP / WS)" value={`${brokerPortTcp} (TCP) / ${brokerPortWs} (WebSocket)`} copyValue={brokerPortTcp} fieldId="Port TCP" copiedField={copiedField} onCopy={handleCopy} />
-              <CopyRow label="MQTT Username (Code)" value={formData.code} fieldId="Username MQTT" copiedField={copiedField} onCopy={handleCopy} isCode />
-              <CopyRow label="MQTT Password" value={formData.mqtt_password || '(Chưa tạo)'} copyValue={formData.mqtt_password} fieldId="Password MQTT" copiedField={copiedField} onCopy={handleCopy} isCode />
-              <CopyRow label="Publish Topic" value={pubTopic} fieldId="Publish Topic" copiedField={copiedField} onCopy={handleCopy} isCode />
-              <CopyRow label="Subscribe Topic" value={subTopic} fieldId="Subscribe Topic" copiedField={copiedField} onCopy={handleCopy} isCode />
+              <div style={{ display:'flex', flexDirection:'column', gap:'.5rem' }}>
+                <CopyRow label="MQTT Broker Host" value={brokerHost} fieldId="Host MQTT" copiedField={copiedField} onCopy={handleCopy} />
+                <CopyRow label="Port (TCP / WS)" value={`${brokerPortTcp} (TCP) / ${brokerPortWs} (WebSocket)`} copyValue={brokerPortTcp} fieldId="Port TCP" copiedField={copiedField} onCopy={handleCopy} />
+                <CopyRow label="MQTT Username (Code)" value={formData.code} fieldId="Username MQTT" copiedField={copiedField} onCopy={handleCopy} isCode />
+                <CopyRow label="MQTT Password" value={formData.mqtt_password || '(Chưa tạo)'} copyValue={formData.mqtt_password} fieldId="Password MQTT" copiedField={copiedField} onCopy={handleCopy} isCode />
+                <CopyRow label="Publish Topics (data/status/ack)" value={`camera/${formData.code}/data  |  camera/${formData.code}/status  |  camera/${formData.code}/ack`} copyValue={`camera/${formData.code}/data`} fieldId="Publish Topic" copiedField={copiedField} onCopy={handleCopy} isCode />
+                <CopyRow label="Subscribe Topic (cmd)" value={subTopic} fieldId="Subscribe Topic" copiedField={copiedField} onCopy={handleCopy} isCode />
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         <div className="modal-footer" style={{ justifyContent:'space-between' }}>
           <div style={{ display:'flex', gap:8, alignItems:'center', flexWrap:'wrap' }}>
-            <Link to={`/cameras/${cam.id}/live`} className="atl-btn" style={{ fontSize:'.75rem' }} onClick={onClose}>
+            <button className="atl-btn" style={{ fontSize:'.75rem' }} onClick={() => { onClose(); onOpenLive?.() }}>
               <Wifi size={13}/> Xem Live Video
-            </Link>
-            <button
-              className="atl-btn ghost"
-              style={{ fontSize:'.75rem', color:'#ef4444', borderColor:'rgba(239,68,68,.3)' }}
-              disabled={deleteMutation.isPending}
-              onClick={handleDeleteCamera}
-            >
-              <Trash2 size={13} style={{ marginRight:4 }} />
-              {deleteMutation.isPending ? 'Đang xóa…' : 'Xóa Camera'}
             </button>
+            {canManage && (
+              <button
+                className="atl-btn ghost"
+                style={{ fontSize:'.75rem', color:'#ef4444', borderColor:'rgba(239,68,68,.3)' }}
+                disabled={deleteMutation.isPending}
+                onClick={handleDeleteCamera}
+              >
+                <Trash2 size={13} style={{ marginRight:4 }} />
+                {deleteMutation.isPending ? 'Đang xóa…' : 'Xóa Camera'}
+              </button>
+            )}
           </div>
           <button className="atl-btn" onClick={onClose}>Đóng</button>
         </div>
@@ -1201,60 +1305,67 @@ function CopyRow({ label, value, copyValue, fieldId, copiedField, onCopy, isCode
    CAMERA CARD — bambuddy style
    ════════════════════════════════════════════ */
 function CameraCard({ cam }: { cam: Camera }) {
-  const [modal, setModal] = useState<'control'|'info'|null>(null)
+  const { user } = useAuth()
+  const canManage = !!user?.is_staff || user?.client_role === 'admin' || !!user?.perms?.can_manage_cameras
+  const [modal, setModal] = useState<'control'|'info'|'live'|null>(null)
   const dev = cam.device
-  const batt = dev?.battery_percent ?? null
+  const battV = dev?.battery_voltage != null ? Number(dev.battery_voltage) : null
+  const { pct: battPct, label: battLabel } = calcLFPPercent(battV, dev?.battery_percent)
+  const batt = battPct ?? dev?.battery_percent ?? null
   const battColor = batt===null?'var(--text-muted)':batt<20?'var(--status-error)':batt<50?'var(--status-warning)':'var(--status-ok)'
 
   return (
     <>
-      {modal==='control' && <CameraDeviceModal cam={cam} onClose={()=>setModal(null)} />}
-      {modal==='info'    && <CameraInfoModal   cam={cam} onClose={()=>setModal(null)} />}
+      {modal==='control' && canManage && <CameraDeviceModal cam={cam} canManage={canManage} onClose={()=>setModal(null)} />}
+      {modal==='info'    && <CameraInfoModal   cam={cam} canManage={canManage} onClose={()=>setModal(null)} onOpenLive={()=>setModal('live')} />}
+      {modal==='live'    && <CameraLiveModal   camId={cam.id} initialCam={cam} onClose={()=>setModal(null)} />}
 
-      <div className="atl-card cam-card" style={{ cursor:'pointer' }} onClick={()=>setModal('control')}>
-        {/* ── Header: name + status ── */}
+      <div id={`cam-card-${cam.id}`} className="atl-card cam-card" style={{ cursor:'pointer' }} onClick={()=>setModal(canManage ? 'control' : 'live')}>
+        {/* ── Header: name + online/offline status badge ── */}
         <div className="cam-card-header">
           <OnlineDot on={cam.is_online} />
           <div style={{ flex:1, minWidth:0 }}>
             <div style={{ fontWeight:700, fontSize:'.85rem', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{cam.name}</div>
             <div style={{ fontSize:'.67rem', color:'var(--text-muted)', fontFamily:'monospace', letterSpacing:'.02em' }}>{cam.code}</div>
           </div>
-          <button onClick={(e)=>{ e.stopPropagation(); setModal('control') }} style={{ background:'none', border:'none', cursor:'pointer', padding:2 }}>
-            <StatusPill status={cam.status} />
+          <button onClick={(e)=>{ e.stopPropagation(); setModal(canManage ? 'control' : 'live') }} style={{ background:'none', border:'none', cursor:'pointer', padding:0 }}>
+            {cam.is_online ? (
+              <span className="badge-base badge-online" style={{ fontSize:'.7rem', fontWeight:800, padding:'.2rem .55rem' }}>
+                ● ONLINE
+              </span>
+            ) : (
+              <span className="badge-base badge-offline" style={{ fontSize:'.7rem', fontWeight:800, padding:'.2rem .55rem', background:'rgba(239,68,68,.15)', color:'#ef4444', border:'1px solid rgba(239,68,68,.35)' }}>
+                🔴 OFFLINE
+              </span>
+            )}
           </button>
         </div>
 
         {/* ── Connection row ── */}
-        <div className="cam-card-conn">
-          <div style={{ display:'flex', alignItems:'center', gap:5 }}>
-            {cam.is_online
-              ? <Wifi size={12} style={{ color:'var(--status-ok)' }} />
-              : <WifiOff size={12} style={{ color:'var(--text-muted)' }} />}
-            <span style={{ color: cam.is_online?'var(--status-ok)':'var(--text-muted)', fontWeight:600 }}>
-              {cam.is_online ? 'Connected' : 'Offline'}
-            </span>
+        <div className="cam-card-conn" style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:6, padding:'.35rem .75rem', whiteSpace:'nowrap', overflow:'hidden' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:6, whiteSpace:'nowrap', flexShrink:0 }}>
             {/* CM4 Power Badge */}
             {(() => {
               const cm4 = dev?.cm4_power_state || 'off'
               const color = cm4 === 'running' ? '#10b981' : cm4 === 'powering_on' ? '#f59e0b' : '#6b7280'
               const label = cm4 === 'running' ? 'CM4 ON' : cm4 === 'powering_on' ? 'CM4 Booting...' : 'CM4 OFF'
               return (
-                <span style={{ fontSize:'.6rem', fontWeight:700, color, background: `${color}18`, padding:'.1rem .4rem', borderRadius:4, border: `1px solid ${color}33` }}>
+                <span style={{ fontSize:'.62rem', fontWeight:700, color, background: `${color}18`, padding:'.12rem .4rem', borderRadius:4, border: `1px solid ${color}33`, whiteSpace:'nowrap', display:'inline-flex', alignItems:'center' }}>
                   {label}
                 </span>
               )
             })()}
             {dev?.sim_signal_dbm != null && <SigBars bars={dev.signal_bars} dbm={dev.sim_signal_dbm} />}
           </div>
-          <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+          <div style={{ display:'flex', alignItems:'center', gap:5, whiteSpace:'nowrap', overflow:'hidden', flexShrink:1, minWidth:0 }}>
             {cam.camera_model && cam.camera_model!=='generic' && (
-              <span style={{ fontSize:'.62rem', fontWeight:700, color:'var(--text-muted)', background:'var(--bg-tertiary)', padding:'.1rem .45rem', borderRadius:4, border:'1px solid var(--border-color)' }}>
+              <span style={{ fontSize:'.62rem', fontWeight:700, color:'var(--text-muted)', background:'var(--bg-tertiary)', padding:'.12rem .4rem', borderRadius:4, border:'1px solid var(--border-color)', whiteSpace:'nowrap', display:'inline-flex', alignItems:'center', flexShrink:0 }}>
                 {cam.camera_model.replace(/_/g,' ').toUpperCase()}
               </span>
             )}
             {cam.site && (
-              <span style={{ fontSize:'.65rem', color:'var(--text-muted)', display:'flex', alignItems:'center', gap:3 }}>
-                <Building2 size={10}/>{cam.site.name}
+              <span style={{ fontSize:'.65rem', color:'var(--text-muted)', display:'inline-flex', alignItems:'center', gap:3, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
+                <Building2 size={10} style={{ flexShrink:0 }}/>{cam.site.name}
               </span>
             )}
           </div>
@@ -1297,38 +1408,43 @@ function CameraCard({ cam }: { cam: Camera }) {
           <div className="cam-card-tele">
             <div className="tele-cell">
               <SigBars bars={dev.signal_bars} />
-              <span>Signal</span>
+              <span>Sóng SIM</span>
             </div>
             <div className={`tele-cell${batt!==null&&batt<20?' warn':''}`}>
               <span className="val" style={{ color:battColor }}>{batt!=null?`${batt}%`:'—'}</span>
-              <span>Battery</span>
+              <span>{battLabel}</span>
             </div>
             <div className="tele-cell">
               <span className="val">{dev.temperature_c!=null?`${dev.temperature_c}°C`:'—'}</span>
-              <span>Temp</span>
+              <span>Nhiệt độ</span>
             </div>
             <div className="tele-cell">
               <span className="val">{dev.humidity_percent!=null?`${dev.humidity_percent}%`:'—'}</span>
-              <span>Humid</span>
+              <span>Độ ẩm</span>
             </div>
           </div>
         ) : (
           <div style={{ padding:'.5rem .75rem', fontSize:'.72rem', color:'var(--text-muted)', textAlign:'center', borderTop:'1px solid var(--border-color)' }}>
-            No telemetry — awaiting first connection
+            Chưa có cảm biến — chờ kết nối đầu tiên
           </div>
         )}
 
-        {/* ── Actions ── */}
+        {/* ── Actions (All buttons fit on 1 single row) ── */}
         <div className="cam-card-actions">
-          <Link to={`/media/camera/${cam.id}`} className="atl-btn" style={{ fontSize:'.7rem' }} onClick={(e)=>e.stopPropagation()}>
-            <ImageIcon size={12}/> Gallery
+          <button className="atl-btn" style={{ fontSize:'.68rem', padding:'.35rem 2px', whiteSpace:'nowrap', color: cam.is_online ? '#ef4444' : undefined, borderColor: cam.is_online ? 'rgba(239,68,68,0.35)' : undefined }} onClick={(e)=>{ e.stopPropagation(); setModal('live') }}>
+            <Wifi size={11}/> Live
+          </button>
+          <Link to={`/media/camera/${cam.id}`} className="atl-btn" style={{ fontSize:'.68rem', padding:'.35rem 2px', whiteSpace:'nowrap' }} onClick={(e)=>{ e.stopPropagation(); try { sessionStorage.setItem('atl-last-viewed-cam', cam.id) } catch {} }}>
+            <ImageIcon size={11}/> Thư viện
           </Link>
-          <button className="atl-btn" style={{ fontSize:'.7rem' }} onClick={(e)=>{ e.stopPropagation(); setModal('info') }}>
-            <Info size={12}/> Thông tin
+          <button className="atl-btn" style={{ fontSize:'.68rem', padding:'.35rem 2px', whiteSpace:'nowrap' }} onClick={(e)=>{ e.stopPropagation(); setModal('info') }}>
+            <Info size={11}/> Thông tin
           </button>
-          <button className="atl-btn" style={{ fontSize:'.7rem' }} onClick={(e)=>{ e.stopPropagation(); setModal('control') }}>
-            <Settings size={12}/> Config
-          </button>
+          {canManage && (
+            <button className="atl-btn" style={{ fontSize:'.68rem', padding:'.35rem 2px', whiteSpace:'nowrap' }} onClick={(e)=>{ e.stopPropagation(); setModal('control') }}>
+              <Settings size={11}/> Cấu hình
+            </button>
+          )}
         </div>
       </div>
     </>
@@ -1415,7 +1531,7 @@ function GroupedCameras({ cameras, expandedSites, onToggleSite }: {
                   {open && (
                     <div className="cam-scroll-row" style={{ display:'flex', gap:'1rem', overflowX:'auto', padding:'0 .9rem .9rem', scrollSnapType:'x proximity' }}>
                       {sg.cams.map(cam => (
-                        <div key={cam.id} style={{ flex:'0 0 300px', maxWidth:300, scrollSnapAlign:'start' }}>
+                        <div key={cam.id} style={{ flex:'0 0 380px', maxWidth:420, scrollSnapAlign:'start' }}>
                           <CameraCard cam={cam}/>
                         </div>
                       ))}
@@ -1445,13 +1561,20 @@ function extractSites(cameras: Camera[]): { id: string; name: string }[] {
    ════════════════════════════════════════════ */
 export default function CamerasPage() {
   const { user } = useAuth()
-  const canManage = !!user?.is_staff || user?.client_role === 'admin'
+  const canManage = !!user?.is_staff || user?.client_role === 'admin' || !!user?.perms?.can_manage_cameras
   const [q, setQ] = useState('')
   const [statusF, setStatusF] = useState('')
   const [siteF, setSiteF] = useState('')
   const [onlineOnly, setOnlineOnly] = useState(false)
   const [modal, setModal] = useState<'addCam'|'addSite'|null>(null)
-  const [expandedSites, setExpandedSites] = useState<Set<string>>(new Set())
+  const [expandedSites, setExpandedSites] = useState<Set<string>>(() => {
+    try {
+      const saved = sessionStorage.getItem('atl-expanded-sites')
+      if (saved) return new Set(JSON.parse(saved))
+    } catch {}
+    return new Set()
+  })
+  const [hasInitializedDefault, setHasInitializedDefault] = useState(false)
 
   const { data, isLoading, refetch } = useQuery<{ results: Camera[]; count: number }>({
     queryKey: ['cameras', q, statusF],
@@ -1466,17 +1589,59 @@ export default function CamerasPage() {
   const onlineCount = allResults.filter(c => c.is_online).length
   const siteOptions = extractSites(allResults)
 
+  // Tự động mở tất cả site và cuộn mượt tới camera vừa xem khi quay lại từ Gallery
+  useEffect(() => {
+    if (data?.results && !hasInitializedDefault) {
+      setHasInitializedDefault(true)
+      try {
+        const saved = sessionStorage.getItem('atl-expanded-sites')
+        if (!saved) {
+          const initialSites = new Set(data.results.map(c => c.site?.id || '__no_site__'))
+          setExpandedSites(initialSites)
+          sessionStorage.setItem('atl-expanded-sites', JSON.stringify(Array.from(initialSites)))
+        }
+      } catch {}
+    }
+
+    if (data?.results && data.results.length > 0) {
+      try {
+        const lastCamId = sessionStorage.getItem('atl-last-viewed-cam')
+        if (lastCamId) {
+          sessionStorage.removeItem('atl-last-viewed-cam')
+          setTimeout(() => {
+            const el = document.getElementById(`cam-card-${lastCamId}`)
+            if (el) {
+              el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+              el.classList.add('highlight-card')
+              setTimeout(() => el.classList.remove('highlight-card'), 2500)
+            }
+          }, 250)
+        }
+      } catch {}
+    }
+  }, [data, hasInitializedDefault])
+
   const toggleSite = (siteId: string) => {
     setExpandedSites(prev => {
       const next = new Set(prev)
       next.has(siteId) ? next.delete(siteId) : next.add(siteId)
+      try {
+        sessionStorage.setItem('atl-expanded-sites', JSON.stringify(Array.from(next)))
+      } catch {}
       return next
     })
   }
+
   const visibleSiteIds = Array.from(new Set(cameras.map(c => c.site?.id || '__no_site__')))
   const allExpanded = visibleSiteIds.length > 0 && visibleSiteIds.every(id => expandedSites.has(id))
   const toggleAll = () => {
-    setExpandedSites(allExpanded ? new Set() : new Set(visibleSiteIds))
+    setExpandedSites(() => {
+      const next = allExpanded ? new Set() : new Set(visibleSiteIds)
+      try {
+        sessionStorage.setItem('atl-expanded-sites', JSON.stringify(Array.from(next)))
+      } catch {}
+      return next
+    })
   }
 
   return (
@@ -1485,41 +1650,39 @@ export default function CamerasPage() {
       {modal==='addSite' && <AddSiteModal   onClose={()=>setModal(null)} />}
 
       {/* ── Header ── */}
-      <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom:'1.25rem' }}>
+      <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom:'1.25rem', flexWrap:'wrap', gap:12 }}>
         <div>
-          <h1 className="page-title">Cameras</h1>
+          <h1 className="page-title" style={{ margin:0, whiteSpace:'nowrap' }}>Danh sách Camera</h1>
           <p style={{ fontSize:'.78rem', color:'var(--text-muted)', marginTop:2 }}>
-            {data?.count??0} cameras &nbsp;·&nbsp;
+            {data?.count??0} camera &nbsp;·&nbsp;
             <span style={{ color:onlineCount>0?'var(--status-ok)':'var(--text-muted)' }}>{onlineCount} online</span>
           </p>
         </div>
-        <div style={{ display:'flex', gap:8 }}>
-          {canManage && (
-            <>
-              <button className="atl-btn" onClick={()=>setModal('addSite')}>
-                <Building2 size={13}/> Add Site
-              </button>
-              <button className="atl-btn primary" onClick={()=>setModal('addCam')}>
-                <Plus size={13}/> Add Camera
-              </button>
-            </>
-          )}
-        </div>
+        {canManage && (
+          <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+            <button className="atl-btn" style={{ fontSize:'.75rem', padding:'.4rem .7rem', whiteSpace:'nowrap' }} onClick={()=>setModal('addSite')}>
+              <Building2 size={13}/> Thêm Công trình
+            </button>
+            <button className="atl-btn primary" style={{ fontSize:'.75rem', padding:'.4rem .7rem', whiteSpace:'nowrap' }} onClick={()=>setModal('addCam')}>
+              <Plus size={13}/> Thêm Camera mới
+            </button>
+          </div>
+        )}
       </div>
 
       {/* ── Filter bar ── */}
       <div className="atl-card" style={{ padding:'.6rem .875rem', marginBottom:'1rem', display:'flex', flexWrap:'wrap', alignItems:'center', gap:8 }}>
         <div style={{ display:'flex', alignItems:'center', gap:6, background:'var(--bg-primary)', border:'1px solid var(--border-color)', borderRadius:7, padding:'.35rem .75rem', flex:1, minWidth:150 }}>
           <Search size={13} style={{ color:'var(--text-muted)', flexShrink:0 }} />
-          <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search name, code…"
+          <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Tìm tên, mã camera…"
                  style={{ background:'none', border:'none', outline:'none', color:'var(--text-primary)', fontSize:'.825rem', flex:1, minWidth:0 }} />
           {q && <button onClick={()=>setQ('')} style={{ background:'none', border:'none', cursor:'pointer', color:'var(--text-muted)', display:'flex' }}><X size={12}/></button>}
         </div>
         <select value={statusF} onChange={e=>setStatusF(e.target.value)} className="atl-select" style={{ width:'auto', minWidth:130 }}>
-          <option value="">All status</option>
-          <option value="active">Active</option>
-          <option value="inactive">Inactive</option>
-          <option value="maintenance">Maintenance</option>
+          <option value="">Tất cả trạng thái</option>
+          <option value="active">Hoạt động</option>
+          <option value="inactive">Tạm dừng</option>
+          <option value="maintenance">Bảo trì</option>
         </select>
         <select value={siteF} onChange={e=>setSiteF(e.target.value)} className="atl-select" style={{ width:'auto', minWidth:150 }}>
           <option value="">Tất cả công trình</option>
@@ -1527,13 +1690,13 @@ export default function CamerasPage() {
         </select>
         <label style={{ display:'flex', alignItems:'center', gap:6, fontSize:'.8rem', color:'var(--text-secondary)', cursor:'pointer', userSelect:'none', whiteSpace:'nowrap' }}>
           <input type="checkbox" checked={onlineOnly} onChange={e=>setOnlineOnly(e.target.checked)} />
-          Online only
+          Chỉ xem camera Online
         </label>
         <button onClick={toggleAll} className="atl-btn ghost" style={{ padding:'.35rem .6rem', fontSize:'.75rem', whiteSpace:'nowrap' }} title={allExpanded?'Thu gọn tất cả':'Mở rộng tất cả'}>
           {allExpanded ? <><ChevronRight size={13}/> Thu gọn</> : <><ChevronDown size={13}/> Mở rộng</>}
         </button>
-        <button onClick={()=>refetch()} className="atl-btn ghost" style={{ padding:'.35rem .5rem' }} title="Refresh">
-          <RefreshCw size={14} />
+        <button onClick={()=>refetch()} className="atl-btn ghost" style={{ padding:'.35rem .5rem' }} title="Làm mới">
+          <RefreshCw size={13} />
         </button>
       </div>
 
@@ -1550,10 +1713,12 @@ export default function CamerasPage() {
       {cameras.length===0 && !isLoading && (
         <div style={{ textAlign:'center', padding:'5rem 0', color:'var(--text-muted)' }}>
           <CameraIcon size={44} style={{ opacity:.12, margin:'0 auto 14px', display:'block' }}/>
-          <p style={{ marginBottom:16, fontWeight:600 }}>No cameras found</p>
-          <button className="atl-btn primary" onClick={()=>setModal('addCam')}>
-            <Plus size={14}/> Add first camera
-          </button>
+          <p style={{ marginBottom:16, fontWeight:600 }}>Không tìm thấy camera nào</p>
+          {canManage && (
+            <button className="atl-btn primary" onClick={()=>setModal('addCam')}>
+              <Plus size={14}/> Thêm camera mới
+            </button>
+          )}
         </div>
       )}
     </div>

@@ -159,5 +159,10 @@ export const toggleUser = (pk: string) => api.post(`/users/${pk}/toggle/`)
 // ── Alert Settings ────────────────────────────────────
 export const getAlertSettings = () => api.get('/settings/alert/')
 
+export const getStorageStats = () => api.get('/storage/stats/')
+
+export const deleteMedia = (pk: string) => api.delete(`/media/${pk}/`)
+export const bulkDeleteMedia = (ids: string[]) => api.post('/media/bulk-delete/', { ids })
+
 export const saveAlertSettings = (cameraPk: string, data: Record<string, unknown>) =>
   api.post(`/settings/alert/${cameraPk}/`, data)

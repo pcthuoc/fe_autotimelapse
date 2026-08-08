@@ -3,6 +3,8 @@ import { getDownloads, deleteRender, deleteArchive } from '../api/client'
 import type { DownloadItem } from '../api/types'
 import { Film, FolderArchive, Download, RefreshCw, Clock, CheckCircle2, XCircle, HardDrive, Trash2 } from 'lucide-react'
 
+import { useAuth } from '../contexts/AuthContext'
+
 function fmtBytes(b: number) {
   if (!b) return '—'
   if (b > 1e9) return (b / 1e9).toFixed(2) + ' GB'
@@ -19,6 +21,9 @@ const STATUS_STYLE: Record<string, { color: string; bg: string; label: string }>
 }
 
 export default function DownloadsPage() {
+  const { user } = useAuth()
+  const canManage = !!user?.is_staff || user?.client_role === 'admin' || !!user?.perms?.can_manage_cameras
+
   const { data, isLoading, refetch } = useQuery<{ results: DownloadItem[]; pending_count: number }>({
     queryKey: ['downloads'],
     queryFn: () => getDownloads().then(r => r.data),
@@ -30,6 +35,7 @@ export default function DownloadsPage() {
   const archives = items.filter(i => i.kind === 'archive')
 
   const del = async (item: DownloadItem) => {
+    if (!canManage) return
     if (!confirm(`Xoá "${item.title}"?`)) return
     try {
       if (item.kind === 'render') await deleteRender(item.id)
@@ -93,9 +99,11 @@ export default function DownloadsPage() {
                   </a>
                 )}
 
-                <button onClick={() => del(item)} className="atl-btn ghost" style={{ fontSize: '.75rem', color: '#f87171', padding: '4px 8px' }} title="Xoá">
-                  <Trash2 size={13} />
-                </button>
+                {canManage && (
+                  <button onClick={() => del(item)} className="atl-btn ghost" style={{ fontSize: '.75rem', color: '#f87171', padding: '4px 8px' }} title="Xoá">
+                    <Trash2 size={13} />
+                  </button>
+                )}
               </div>
             )
           })}
@@ -108,11 +116,14 @@ export default function DownloadsPage() {
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18, flexWrap: 'wrap', gap: 10 }}>
         <div>
-          <h1 style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>Downloads</h1>
-          <p style={{ fontSize: '.78rem', color: 'var(--text-secondary)', margin: '4px 0 0' }}>
-            Trung tâm quản lý video timelapse đã render và thư mục ảnh đã nén
-            {(data?.pending_count ?? 0) > 0 && <span style={{ color: '#60a5fa', fontWeight: 700 }}> · {data!.pending_count} đang xử lý</span>}
-          </p>
+          <h1 style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--text-primary)', margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+            Tải về
+            {(data?.pending_count ?? 0) > 0 && (
+              <span style={{ fontSize: '.72rem', color: '#60a5fa', background: 'rgba(96,165,250,0.12)', padding: '2px 8px', borderRadius: 12, fontWeight: 700 }}>
+                {data!.pending_count} đang xử lý
+              </span>
+            )}
+          </h1>
         </div>
         <button className="atl-btn" style={{ fontSize: '.78rem' }} onClick={() => refetch()}>
           <RefreshCw size={13} style={{ marginRight: 5 }} />Làm mới
@@ -123,8 +134,8 @@ export default function DownloadsPage() {
         <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>Đang tải…</div>
       ) : (
         <>
-          <Section title="Video Renders" icon={<Film size={17} />} list={renders} color="#a78bfa" />
-          <Section title="ZIP Archives (ảnh nén)" icon={<FolderArchive size={17} />} list={archives} color="#22d3ee" />
+          <Section title="Video Timelapse" icon={<Film size={17} />} list={renders} color="#a78bfa" />
+          <Section title="Thư mục nén ZIP" icon={<FolderArchive size={17} />} list={archives} color="#22d3ee" />
         </>
       )}
     </div>

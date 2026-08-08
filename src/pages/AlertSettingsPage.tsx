@@ -54,10 +54,7 @@ export default function AlertSettingsPage() {
     <div>
       {/* ── Header + stats ── */}
       <div style={{ marginBottom: 16 }}>
-        <h1 className="page-title">Cài đặt cảnh báo</h1>
-        <p style={{ fontSize: '.78rem', color: 'var(--text-muted)', marginTop: 2 }}>
-          Chọn camera để cấu hình ngưỡng cảnh báo pin / tín hiệu / offline / nhiệt độ
-        </p>
+        <h1 className="page-title" style={{ margin: 0 }}>Cài đặt cảnh báo</h1>
       </div>
 
       <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>

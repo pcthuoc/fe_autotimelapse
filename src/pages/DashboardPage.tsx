@@ -1,10 +1,12 @@
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import { getDashboard, getDownloads, getRenders } from '../api/client'
-import type { DashboardData, DownloadItem, VideoRender } from '../api/types'
+import { getDashboard, getDownloads, getRenders, getStorageStats } from '../api/client'
+import type { DashboardData, DownloadItem, VideoRender, Camera as CameraType } from '../api/types'
+import CameraLiveModal from '../components/CameraLiveModal'
 import {
-  Camera, Wifi, WifiOff, Image as ImageIcon, HardDrive, Building2,
-  Film, TrendingUp, Activity, ArrowRight, Zap, FolderArchive,
+  Camera as CameraIcon, Wifi, WifiOff, Image as ImageIcon, HardDrive, Building2,
+  Film, TrendingUp, Activity, ArrowRight, Zap, FolderArchive, Database, Cloud,
 } from 'lucide-react'
 
 function fmtBytes(b: number) {
@@ -72,11 +74,338 @@ const STATUS_COLOR: Record<string, string> = {
   pending: '#f59e0b', processing: '#60a5fa', ready: '#34d399', failed: '#f87171', expired: '#9ca3af',
 }
 
+function StorageTile({ stats }: { stats: any }) {
+  const sw = stats?.seaweed ?? {}
+  const r2 = stats?.r2 ?? {}
+  const usedPct = sw.usage_pct ?? 0
+  const barColor = usedPct > 80 ? '#f87171' : usedPct > 60 ? '#f59e0b' : '#34d399'
+  const color = '#a78bfa'
+  return (
+    <div style={{
+      border: '1px solid var(--border-color)', borderRadius: 14, padding: '1rem 1.1rem',
+      background: 'var(--bg-secondary)', position: 'relative', overflow: 'hidden', height: '100%',
+    }}>
+      <div style={{ position: 'absolute', top: -30, right: -30, width: 90, height: 90, borderRadius: '50%', background: color, opacity: .08, pointerEvents: 'none' }} />
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+        <div style={{ width: 38, height: 38, borderRadius: 10, background: `${color}1c`, color, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <HardDrive size={18} />
+        </div>
+        <span style={{ fontSize: '.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.07em', color: 'var(--text-muted)' }}>Storage</span>
+      </div>
+
+      <div style={{ display: 'flex', gap: 10 }}>
+        {/* Cột trái: SeaweedFS */}
+        <div style={{ flex: 1, borderRight: '1px solid var(--border-color)', paddingRight: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 6 }}>
+            <Database size={10} style={{ color }} />
+            <span style={{ fontSize: '.65rem', fontWeight: 700, color: 'var(--text-primary)' }}>SeaweedFS</span>
+            <span style={{ fontSize: '.58rem', color: 'var(--text-muted)', marginLeft: 'auto' }}>Hot</span>
+          </div>
+          <div style={{ height: 4, borderRadius: 2, background: 'var(--bg-tertiary)', overflow: 'hidden', marginBottom: 4 }}>
+            <div style={{ width: `${Math.min(usedPct, 100)}%`, height: '100%', background: barColor, borderRadius: 2, transition: 'width .6s' }} />
+          </div>
+          <div style={{ fontSize: '.68rem', fontWeight: 800, color: barColor }}>{usedPct}%</div>
+          <div style={{ fontSize: '.62rem', color: 'var(--text-muted)' }}>{fmtBytes(sw.bytes ?? 0)} / 20 GB</div>
+          <div style={{ fontSize: '.6rem', color: 'var(--text-muted)', marginTop: 2 }}>{(sw.count ?? 0).toLocaleString('vi-VN')} ảnh</div>
+        </div>
+
+        {/* Cột phải: Cloudflare R2 */}
+        <div style={{ flex: 1 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 6 }}>
+            <Cloud size={10} style={{ color: '#34d399' }} />
+            <span style={{ fontSize: '.65rem', fontWeight: 700, color: 'var(--text-primary)' }}>R2</span>
+            <span style={{ fontSize: '.58rem', fontWeight: 700, color: r2.enabled ? '#34d399' : '#9ca3af',
+              background: r2.enabled ? 'rgba(52,211,153,.12)' : 'rgba(156,163,175,.12)',
+              padding: '1px 6px', borderRadius: 6, marginLeft: 'auto' }}>
+              {r2.enabled ? '✓' : '✗'}
+            </span>
+          </div>
+          <div style={{ fontSize: '.68rem', fontWeight: 800, color: r2.enabled ? '#34d399' : '#9ca3af' }}>
+            {r2.enabled ? 'Active' : 'Disabled'}
+          </div>
+          <div style={{ fontSize: '.62rem', color: 'var(--text-muted)' }}>{fmtBytes(r2.bytes ?? 0)}</div>
+          <div style={{ fontSize: '.6rem', color: 'var(--text-muted)', marginTop: 2 }}>{(r2.count ?? 0).toLocaleString('vi-VN')} ảnh</div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function SiteCardItem({
+  sd,
+  isSuperadmin,
+  onOpenLive,
+}: {
+  sd: DashboardData['sites_data'][0]
+  isSuperadmin: boolean
+  onOpenLive: (cam: CameraType) => void
+}) {
+  const cameras = sd.cameras || []
+  const [activeCamId, setActiveCamId] = useState<string>(cameras[0]?.cam?.id || '')
+  const [isHovered, setIsHovered] = useState(false)
+
+  const activeCw = cameras.find(c => c.cam.id === activeCamId) || cameras[0]
+  const currentThumb = activeCw?.thumb_url || activeCw?.cam?.latest_thumb_url || sd.latest_thumb_url
+
+  return (
+    <div
+      className="site-card-item"
+      style={{
+        flex: '0 0 320px',
+        maxWidth: 340,
+        scrollSnapAlign: 'start',
+        border: '1px solid var(--border-color)',
+        borderRadius: 14,
+        background: 'var(--bg-secondary)',
+        overflow: 'hidden',
+        boxShadow: '0 4px 20px rgba(0,0,0,0.06)',
+        transition: 'transform 0.2s ease, border-color 0.2s ease',
+      }}
+    >
+      {/* ── Top Cover Image with Dynamic Photo Preview & Action Overlay ── */}
+      <div
+        style={{
+          height: 145,
+          background: 'var(--bg-primary)',
+          position: 'relative',
+          overflow: 'hidden',
+        }}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+      >
+        {currentThumb ? (
+          <img
+            src={currentThumb}
+            alt={activeCw?.cam?.name || sd.site.name}
+            style={{
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+              transition: 'opacity 0.25s ease, transform 0.35s ease',
+              transform: isHovered ? 'scale(1.04)' : 'scale(1)',
+            }}
+          />
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-muted)', gap: 6 }}>
+            <CameraIcon size={26} style={{ opacity: .2 }} />
+            <span style={{ fontSize: '.7rem', opacity: .5 }}>Chưa có dữ liệu ảnh</span>
+          </div>
+        )}
+
+        {/* Dynamic Header Overlay on Image */}
+        <div
+          style={{
+            position: 'absolute',
+            top: 8,
+            left: 8,
+            right: 8,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            pointerEvents: 'none',
+            zIndex: 2,
+          }}
+        >
+          {/* Active Camera code pill */}
+          {activeCw ? (
+            <span
+              style={{
+                fontSize: '.65rem',
+                fontWeight: 800,
+                padding: '3px 9px',
+                borderRadius: 7,
+                background: 'rgba(0, 0, 0, 0.72)',
+                backdropFilter: 'blur(8px)',
+                color: '#fff',
+                border: '1px solid rgba(255, 255, 255, 0.2)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 5,
+              }}
+            >
+              <span
+                style={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: '50%',
+                  background: activeCw.online ? '#10b981' : '#ef4444',
+                  boxShadow: activeCw.online ? '0 0 6px #10b981' : 'none',
+                }}
+              />
+              {activeCw.cam.code}
+            </span>
+          ) : <span />}
+
+          {/* Site Online summary badge */}
+          <span
+            style={{
+              fontSize: '.62rem',
+              fontWeight: 800,
+              padding: '3px 9px',
+              borderRadius: 7,
+              background: 'rgba(0, 0, 0, 0.72)',
+              backdropFilter: 'blur(8px)',
+              color: sd.online_count > 0 ? '#34d399' : '#f87171',
+              border: `1px solid ${sd.online_count > 0 ? 'rgba(52,211,153,0.35)' : 'rgba(248,113,113,0.35)'}`,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 4,
+            }}
+          >
+            {sd.online_count > 0 ? <Wifi size={10} /> : <WifiOff size={10} />}
+            {sd.online_count}/{sd.cam_count} Online
+          </span>
+        </div>
+
+        {/* Hover Quick Action Buttons on Image */}
+        {activeCw && (
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              background: 'linear-gradient(to top, rgba(0,0,0,0.85), rgba(0,0,0,0.25) 60%, transparent)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              opacity: isHovered ? 1 : 0,
+              pointerEvents: isHovered ? 'auto' : 'none',
+              transition: 'opacity 0.25s ease',
+              zIndex: 3,
+            }}
+          >
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                onOpenLive(activeCw.cam)
+              }}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 5,
+                padding: '6px 12px',
+                borderRadius: 8,
+                background: 'rgba(239, 68, 68, 0.92)',
+                color: '#fff',
+                fontSize: '.72rem',
+                fontWeight: 800,
+                border: 'none',
+                cursor: 'pointer',
+                boxShadow: '0 4px 14px rgba(239, 68, 68, 0.45)',
+                transition: 'transform 0.15s ease',
+              }}
+              onMouseEnter={e => (e.currentTarget.style.transform = 'scale(1.05)')}
+              onMouseLeave={e => (e.currentTarget.style.transform = 'scale(1)')}
+            >
+              <Wifi size={12} /> Xem Live Stream
+            </button>
+            <Link
+              to={`/media/camera/${activeCw.cam.id}`}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 5,
+                padding: '6px 12px',
+                borderRadius: 8,
+                background: 'rgba(255, 255, 255, 0.95)',
+                color: '#111',
+                fontSize: '.72rem',
+                fontWeight: 800,
+                textDecoration: 'none',
+                boxShadow: '0 4px 14px rgba(0,0,0,0.3)',
+                transition: 'transform 0.15s ease',
+              }}
+              onMouseEnter={e => (e.currentTarget.style.transform = 'scale(1.05)')}
+              onMouseLeave={e => (e.currentTarget.style.transform = 'scale(1)')}
+            >
+              <ImageIcon size={12} /> Thư viện
+            </Link>
+          </div>
+        )}
+      </div>
+
+      {/* ── Card Content Body ── */}
+      <div style={{ padding: '.8rem .95rem' }}>
+        {isSuperadmin && sd.site.client_name && (
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '.62rem', fontWeight: 700, color: '#f59e0b', background: 'rgba(245,158,11,.12)', padding: '1px 7px', borderRadius: 6, marginBottom: 5 }}>
+            <Building2 size={9} />{sd.site.client_name}
+          </div>
+        )}
+        <div style={{ fontWeight: 800, fontSize: '.9rem', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span>{sd.site.name}</span>
+          <Link to={`/cameras?site=${sd.site.id}`} style={{ fontSize: '.7rem', color: '#60a5fa', textDecoration: 'none', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 2 }}>
+            Chi tiết <ArrowRight size={11} />
+          </Link>
+        </div>
+        <div style={{ fontSize: '.72rem', color: 'var(--text-muted)', marginTop: 2 }}>
+          {sd.cam_count} camera · {sd.today_count} ảnh hôm nay
+        </div>
+
+        {/* ── Interactive Camera Chips Switcher ── */}
+        <div style={{ marginTop: 10 }}>
+          <div style={{ fontSize: '.62rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '.04em' }}>
+            Rê chuột / Chọn camera đổi ảnh ({cameras.length}):
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {cameras.map(cw => {
+              const isActive = cw.cam.id === (activeCw?.cam?.id || activeCamId)
+              return (
+                <button
+                  key={cw.cam.id}
+                  onClick={() => setActiveCamId(cw.cam.id)}
+                  onMouseEnter={() => setActiveCamId(cw.cam.id)}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 5,
+                    fontSize: '.7rem',
+                    fontWeight: isActive ? 800 : 600,
+                    padding: '3px 9px',
+                    borderRadius: 7,
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease',
+                    background: isActive
+                      ? cw.online ? 'rgba(52, 211, 153, 0.18)' : 'rgba(239, 68, 68, 0.18)'
+                      : 'var(--bg-tertiary)',
+                    color: isActive
+                      ? cw.online ? 'var(--status-ok)' : '#ef4444'
+                      : 'var(--text-secondary)',
+                    border: `1px solid ${
+                      isActive
+                        ? cw.online ? 'rgba(52,211,153,0.5)' : 'rgba(239,68,68,0.5)'
+                        : 'var(--border-color)'
+                    }`,
+                    boxShadow: isActive ? `0 0 10px ${cw.online ? 'rgba(16,185,129,0.25)' : 'rgba(239,68,68,0.25)'}` : 'none',
+                  }}
+                  title={`Rê chuột / Bấm để đổi xem ảnh camera ${cw.cam.code}`}
+                >
+                  <span
+                    style={{
+                      width: 6,
+                      height: 6,
+                      borderRadius: '50%',
+                      background: cw.online ? 'var(--status-ok)' : '#ef4444',
+                      boxShadow: cw.online ? '0 0 6px var(--status-ok)' : 'none',
+                    }}
+                  />
+                  {cw.cam.code}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function DashboardPage() {
+  const [liveCam, setLiveCam] = useState<CameraType | null>(null)
   const { data, isLoading } = useQuery<DashboardData>({
     queryKey: ['dashboard'],
     queryFn: () => getDashboard().then(r => r.data),
-    refetchInterval: 30000,
+    refetchInterval: 60000,
+    staleTime: 30000,
   })
   const { data: dls } = useQuery<{ results: DownloadItem[]; pending_count: number }>({
     queryKey: ['downloads'],
@@ -85,6 +414,13 @@ export default function DashboardPage() {
   const { data: rendersData } = useQuery<{ results: VideoRender[] }>({
     queryKey: ['renders'],
     queryFn: () => getRenders().then(r => r.data),
+  })
+  const { data: storageStats } = useQuery({
+    queryKey: ['storage-stats'],
+    queryFn: () => getStorageStats().then(r => r.data),
+    refetchInterval: 120000,
+    staleTime: 60000,
+    enabled: data?.role === 'superadmin',
   })
 
   if (isLoading) return <div style={{ padding: '4rem', textAlign: 'center', color: 'var(--text-muted)' }}>Đang tải…</div>
@@ -106,10 +442,10 @@ export default function DashboardPage() {
   const canManageClients = isSuperadmin || isAdmin
 
   // Tiêu đề + phụ đề theo tầng quyền
-  const headerTitle = isSuperadmin ? 'Dashboard hệ thống'
-    : isAdmin ? (d?.client_name || 'Dashboard')
+  const headerTitle = isSuperadmin ? 'Tổng quan hệ thống'
+    : isAdmin ? (d?.client_name || 'Bảng điều khiển')
     : 'Bảng điều khiển'
-  const headerSub = isSuperadmin ? 'Tổng quan hệ thống'
+  const headerSub = isSuperadmin ? 'Quản trị tổng thể hệ thống'
     : isAdmin ? `Quản trị khách hàng · ${d?.client_name ?? ''}`
     : (d?.client_name ? `Khách hàng: ${d.client_name}` : 'Camera timelapse của bạn')
 
@@ -128,24 +464,25 @@ export default function DashboardPage() {
       {/* Stats row — thay đổi theo tầng quyền */}
       <div className="dash-stats-grid">
         {isSuperadmin && (
-          <StatTile icon={<Building2 size={18} />} label="Clients" value={d?.total_clients ?? 0}
+          <StatTile icon={<Building2 size={18} />} label="Khách hàng" value={d?.total_clients ?? 0}
                     sub={`${d?.total_sites ?? 0} công trình`} color="#f59e0b" to="/clients" />
         )}
         {isAdmin && (
           <StatTile icon={<Building2 size={18} />} label="Thành viên" value={d?.total_members ?? 0}
                     sub={`${d?.total_sites ?? 0} công trình`} color="#f59e0b" to="/clients" />
         )}
-        <StatTile icon={<Camera size={18} />} label="Cameras" value={d?.total_cameras ?? 0}
+        <StatTile icon={<CameraIcon size={18} />} label="Camera" value={d?.total_cameras ?? 0}
                   sub={`${d?.total_sites ?? 0} công trình`} color="#34d399" to="/cameras" />
         <StatTile icon={<Wifi size={18} />} label="Online" value={d?.online_count ?? 0}
                   sub={offlineCount > 0 ? `${offlineCount} offline` : 'Tất cả hoạt động'} color="#60a5fa" to="/cameras" />
         <StatTile icon={<ImageIcon size={18} />} label="Ảnh hôm nay" value={d?.today_photos ?? 0}
                   sub={`${(d?.total_photos ?? 0).toLocaleString('vi-VN')} ảnh tổng`} color="#f59e0b" />
-        {!isMember && (
+        {!isMember && !(isSuperadmin && storageStats) && (
           <StatTile icon={<HardDrive size={18} />} label="Dung lượng" value={fmtBytes(d?.total_bytes ?? 0)}
-                    sub="SeaweedFS storage" color="#a78bfa" />
+                    sub="Lưu trữ Object" color="#a78bfa" />
         )}
-        <StatTile icon={<Film size={18} />} label="Renders" value={rendersData?.results?.length ?? 0}
+        {isSuperadmin && storageStats && <StorageTile stats={storageStats} />}
+        <StatTile icon={<Film size={18} />} label="Video Render" value={rendersData?.results?.length ?? 0}
                   sub={(dls?.pending_count ?? 0) > 0 ? `${dls!.pending_count} đang xử lý` : 'Video timelapse'} color="#f472b6" to="/renders" />
       </div>
 
@@ -181,7 +518,7 @@ export default function DashboardPage() {
                   {item.kind === 'render' ? <Film size={12} /> : <FolderArchive size={12} />}
                 </span>
                 <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
-                  <div style={{ color: 'var(--text-primary)', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  <div style={{ color: 'var(--text-primary)', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow:'ellipsis' }}>
                     {item.camera_code} · {item.title}
                   </div>
                   <div style={{ color: 'var(--text-muted)', fontSize: '.65rem' }}>{new Date(item.created_at).toLocaleString('vi-VN')}</div>
@@ -209,48 +546,12 @@ export default function DashboardPage() {
       </div>
       <div style={{ display: 'flex', gap: 12, marginBottom: 16, overflowX: 'auto', paddingBottom: 6, scrollSnapType: 'x proximity' }}>
         {sitesRecent.map(sd => (
-          <div key={sd.site.id} className="site-card-item" style={{ border: '1px solid var(--border-color)', borderRadius: 13, background: 'var(--bg-secondary)', overflow: 'hidden' }}>
-            {/* Thumbnail strip */}
-            <div style={{ height: 110, background: 'var(--bg-primary)', position: 'relative' }}>
-              {sd.latest_thumb_url ? (
-                <img src={sd.latest_thumb_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-              ) : (
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-muted)' }}>
-                  <Camera size={24} style={{ opacity: .18 }} />
-                </div>
-              )}
-              <div style={{ position: 'absolute', top: 8, right: 8, display: 'flex', gap: 5 }}>
-                <span style={{ fontSize: '.62rem', fontWeight: 700, padding: '2px 8px', borderRadius: 8, background: 'rgba(0,0,0,.55)', color: sd.online_count > 0 ? '#34d399' : '#9ca3af', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                  {sd.online_count > 0 ? <Wifi size={9} /> : <WifiOff size={9} />}
-                  {sd.online_count}/{sd.cam_count}
-                </span>
-              </div>
-            </div>
-            <div style={{ padding: '.7rem .9rem' }}>
-              {isSuperadmin && sd.site.client_name && (
-                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '.62rem', fontWeight: 700, color: '#f59e0b', background: 'rgba(245,158,11,.12)', padding: '1px 7px', borderRadius: 6, marginBottom: 5 }}>
-                  <Building2 size={9} />{sd.site.client_name}
-                </div>
-              )}
-              <div style={{ fontWeight: 800, fontSize: '.85rem', color: 'var(--text-primary)' }}>{sd.site.name}</div>
-              <div style={{ fontSize: '.7rem', color: 'var(--text-muted)', marginTop: 2 }}>
-                {sd.cam_count} camera · {sd.today_count} ảnh hôm nay
-              </div>
-              {/* Camera chips */}
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 8 }}>
-                {sd.cameras.slice(0, 4).map(cw => (
-                  <Link key={cw.cam.id} to={`/cameras?q=${cw.cam.code}`} className="no-underline"
-                        style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '.66rem', padding: '2px 8px', borderRadius: 6,
-                                 background: cw.online ? 'rgba(52,211,153,.1)' : 'var(--bg-tertiary)',
-                                 color: cw.online ? '#34d399' : 'var(--text-muted)', border: '1px solid var(--border-color)' }}>
-                    <span style={{ width: 5, height: 5, borderRadius: '50%', background: cw.online ? '#34d399' : '#6b7280', display: 'inline-block' }} />
-                    {cw.cam.code}
-                  </Link>
-                ))}
-                {sd.cameras.length > 4 && <span style={{ fontSize: '.66rem', color: 'var(--text-muted)' }}>+{sd.cameras.length - 4}</span>}
-              </div>
-            </div>
-          </div>
+          <SiteCardItem
+            key={sd.site.id}
+            sd={sd}
+            isSuperadmin={isSuperadmin}
+            onOpenLive={(cam) => setLiveCam(cam)}
+          />
         ))}
         {(d?.sites_data ?? []).length === 0 && (
           <div style={{ flex: 1, padding: '2rem', textAlign: 'center', color: 'var(--text-muted)', border: '1px dashed var(--border-color)', borderRadius: 13 }}>
@@ -258,6 +559,15 @@ export default function DashboardPage() {
           </div>
         )}
       </div>
+
+      {/* Live Stream Popup Theater Modal */}
+      {liveCam && (
+        <CameraLiveModal
+          camId={liveCam.id}
+          initialCam={liveCam}
+          onClose={() => setLiveCam(null)}
+        />
+      )}
 
       {/* Recent renders strip */}
       {recentRenders.length > 0 && (
@@ -296,5 +606,3 @@ export default function DashboardPage() {
     </div>
   )
 }
-
-import React from 'react'

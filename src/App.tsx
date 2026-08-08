@@ -41,6 +41,23 @@ function RequireAdmin({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
 
+/** Chặn route chỉ dành riêng cho superadmin hệ thống. */
+function RequireSuperadmin({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth()
+  if (loading) return <div style={{ minHeight: '100vh', background: 'var(--bg-primary)' }} />
+  if (!user) return <Navigate to="/login" replace />
+  if (!user.is_staff) {
+    return (
+      <div style={{ minHeight: '60vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, color: 'var(--text-muted)' }}>
+        <span style={{ fontSize: '2.5rem' }}>🔒</span>
+        <div style={{ fontSize: '1rem', fontWeight: 700 }}>Không có quyền truy cập</div>
+        <div style={{ fontSize: '.8rem' }}>Trang này yêu cầu quyền Superadmin hệ thống.</div>
+      </div>
+    )
+  }
+  return <>{children}</>
+}
+
 function AppRoutes() {
   return (
     <Routes>
@@ -55,7 +72,7 @@ function AppRoutes() {
         <Route path="downloads" element={<DownloadsPage />} />
         {/* Chỉ admin/superadmin */}
         <Route path="clients" element={<RequireAdmin><ClientsPage /></RequireAdmin>} />
-        <Route path="users"   element={<RequireAdmin><UsersPage /></RequireAdmin>} />
+        <Route path="users"   element={<RequireSuperadmin><UsersPage /></RequireSuperadmin>} />
         {/* Cảnh báo: member được xem (read-only), admin mới sửa được */}
         <Route path="settings" element={<AlertSettingsPage />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />

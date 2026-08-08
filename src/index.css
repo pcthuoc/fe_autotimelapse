@@ -116,11 +116,13 @@ html, body {
   min-height: 48px;
 }
 .cam-card-conn {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: .3rem .875rem;
+  display: flex; align-items: center; justify-content: space-between; gap: 6px;
+  padding: .35rem .875rem;
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border-color);
   font-size: .72rem;
+  white-space: nowrap;
+  overflow: hidden;
 }
 .cam-card-thumb { position: relative; aspect-ratio: 16/9; overflow: hidden; background: var(--bg-primary); }
 .cam-card-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
@@ -135,9 +137,13 @@ html, body {
   padding: .45rem .625rem;
 }
 .cam-card-actions {
-  display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px;
+  display: flex; gap: 4px;
   padding: .4rem .625rem .625rem;
   border-top: 1px solid var(--border-color);
+}
+.cam-card-actions > * {
+  flex: 1;
+  min-width: 0;
 }
 
 /* ── Telemetry cell ── */
@@ -198,6 +204,13 @@ html, body {
 .badge-maintenance { background: rgba(245,158,11,.12); color: #fbbf24; border: 1px solid rgba(245,158,11,.2); }
 .badge-online   { background: rgba(34,197,94,.12);  color: #4ade80; }
 .badge-offline  { background: rgba(107,114,128,.12); color: #9ca3af; }
+
+/* Light Mode Overrides for High Contrast */
+html.light .badge-active      { background: rgba(34,197,94,.15);  color: #15803d; border-color: rgba(34,197,94,.3); }
+html.light .badge-inactive    { background: rgba(239,68,68,.15);  color: #b91c1c; border-color: rgba(239,68,68,.3); }
+html.light .badge-maintenance { background: rgba(245,158,11,.15); color: #b45309; border-color: rgba(245,158,11,.3); }
+html.light .badge-online      { background: rgba(34,197,94,.15);  color: #15803d; }
+html.light .badge-offline     { background: rgba(107,114,128,.15); color: #4b5563; }
 
 /* ── Sidebar nav link ── */
 .nav-link {
@@ -468,6 +481,10 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); }
   gap: 8px;
 }
 
+.gallery-grid > div:hover .photo-delete-btn {
+  opacity: 1 !important;
+}
+
 .day-stats-sidebar {
   position: sticky;
   top: 16px;
@@ -541,6 +558,13 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); }
   .dash-stats-grid {
     grid-template-columns: 1fr;
   }
+}
+
+/* ── Auto-scrolled Camera Card Highlight ── */
+.highlight-card {
+  box-shadow: 0 0 0 2px #3b82f6, 0 0 24px rgba(59, 130, 246, 0.45) !important;
+  border-color: #3b82f6 !important;
+  transition: all 0.3s ease !important;
 }
 
 

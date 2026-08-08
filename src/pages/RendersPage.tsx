@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { getRenders, getCameras, createRender, deleteRender } from '../api/client'
 import type { VideoRender, Camera } from '../api/types'
+import { useAuth } from '../contexts/AuthContext'
 import { Film, Plus, X, Download, Clock, CheckCircle2, XCircle, RefreshCw, Play, Trash2 } from 'lucide-react'
 
 function fmtBytes(b: number | null) {
@@ -40,6 +41,8 @@ const today = () => new Date().toISOString().slice(0, 10)
 const weekAgo = () => new Date(Date.now() - 7 * 864e5).toISOString().slice(0, 10)
 
 export default function RendersPage() {
+  const { user } = useAuth()
+  const canManage = !!user?.is_staff || user?.client_role === 'admin' || !!user?.perms?.can_manage_cameras
   const qc = useQueryClient()
   const [modal, setModal] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -91,6 +94,7 @@ export default function RendersPage() {
   }
 
   const del = async (r: VideoRender) => {
+    if (!canManage) return
     if (!confirm(`Xoá video render ${r.date_from} → ${r.date_to}?`)) return
     try {
       await deleteRender(r.id)
@@ -103,14 +107,15 @@ export default function RendersPage() {
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18, flexWrap: 'wrap', gap: 10 }}>
         <div>
-          <h1 style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>Video Renders</h1>
-          <p style={{ fontSize: '.78rem', color: 'var(--text-secondary)', margin: '4px 0 0' }}>Render video timelapse từ ảnh camera</p>
+          <h1 style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>Video Timelapse</h1>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="atl-btn" style={{ fontSize: '.78rem' }} onClick={() => refetch()}><RefreshCw size={13} /></button>
-          <button className="atl-btn primary" style={{ fontSize: '.8rem' }} onClick={() => { setError(''); setModal(true) }}>
-            <Plus size={14} style={{ marginRight: 5 }} />Render mới
-          </button>
+          {canManage && (
+            <button className="atl-btn primary" style={{ fontSize: '.8rem' }} onClick={() => { setError(''); setModal(true) }}>
+              <Plus size={14} style={{ marginRight: 5 }} />Tạo Video mới
+            </button>
+          )}
         </div>
       </div>
 
@@ -135,6 +140,7 @@ export default function RendersPage() {
                   {r.item_count > 0 && <> · {r.item_count} frames</>}
                   {r.size_bytes ? <> · {fmtBytes(r.size_bytes)}</> : null}
                   {' · '}{new Date(r.created_at).toLocaleString('vi-VN')}
+                  {r.expires_at && r.status === 'ready' && <span style={{ color: '#f59e0b', marginLeft: 4 }}>· hết hạn {new Date(r.expires_at).toLocaleString('vi-VN')}</span>}
                 </div>
                 {r.error && <div style={{ fontSize: '.7rem', color: '#f87171', marginTop: 2 }}>{r.error}</div>}
               </div>
@@ -149,7 +155,7 @@ export default function RendersPage() {
               )}
 
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '.7rem', fontWeight: 700, color: st.color, background: st.bg, padding: '3px 10px', borderRadius: 12 }}>
-                {r.status === 'ready' ? <CheckCircle2 size={11} /> : r.status === 'failed' ? <XCircle size={11} /> : <Clock size={11} />}
+                {r.status === 'ready' ? <CheckCircle2 size={11} /> : (r.status === 'failed' || r.status === 'expired') ? <XCircle size={11} /> : <Clock size={11} />}
                 {st.label}
               </span>
 
@@ -164,9 +170,11 @@ export default function RendersPage() {
                 </>
               )}
 
-              <button onClick={() => del(r)} className="atl-btn ghost" style={{ fontSize: '.75rem', color: '#f87171', padding: '4px 8px' }} title="Xoá render">
-                <Trash2 size={13} />
-              </button>
+              {canManage && (
+                <button onClick={() => del(r)} className="atl-btn ghost" style={{ fontSize: '.75rem', color: '#f87171', padding: '4px 8px' }} title="Xoá render">
+                  <Trash2 size={13} />
+                </button>
+              )}
             </div>
           )
         })}
@@ -175,7 +183,7 @@ export default function RendersPage() {
       {renders.length === 0 && !isLoading && (
         <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
           <Film size={40} style={{ opacity: .2, marginBottom: 10 }} />
-          <div>Chưa có video render nào — bấm "Render mới" để bắt đầu</div>
+          <div>Chưa có video render nào{canManage ? ' — bấm "Render mới" để bắt đầu' : ''}</div>
         </div>
       )}
 

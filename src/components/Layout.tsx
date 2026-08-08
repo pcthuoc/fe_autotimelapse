@@ -10,15 +10,15 @@ import { useState } from 'react'
 
 // roles: ai được thấy item. 'superadmin' | 'admin' | 'member'
 const navItems = [
-  { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard',     color: '#60a5fa', roles: ['superadmin','admin','member'] },
-  { to: '/cameras',   icon: Camera,          label: 'Cameras',       color: '#34d399', roles: ['superadmin','admin','member'] },
-  { to: '/clients',   icon: Building2,       label: 'Clients',       color: '#f59e0b', roles: ['superadmin','admin'] },
-  { to: '/renders',   icon: Film,            label: 'Video Renders', color: '#a78bfa', roles: ['superadmin','admin','member'] },
-  { to: '/downloads', icon: DownloadCloud,   label: 'Downloads',     color: '#22d3ee', roles: ['superadmin','admin','member'] },
+  { to: '/dashboard', icon: LayoutDashboard, label: 'Tổng quan',        color: '#60a5fa', roles: ['superadmin','admin','member'] },
+  { to: '/cameras',   icon: Camera,          label: 'Camera',           color: '#34d399', roles: ['superadmin','admin','member'] },
+  { to: '/clients',   icon: Building2,       label: 'Khách hàng',       color: '#f59e0b', roles: ['superadmin','admin'] },
+  { to: '/renders',   icon: Film,            label: 'Video Timelapse',  color: '#a78bfa', roles: ['superadmin','admin','member'] },
+  { to: '/downloads', icon: DownloadCloud,   label: 'Tải về',           color: '#22d3ee', roles: ['superadmin','admin','member'] },
 ]
 const adminItems = [
-  { to: '/users',    icon: Users, label: 'Users',          color: '#f472b6', roles: ['superadmin','admin'] },
-  { to: '/settings', icon: Bell,  label: 'Alert Settings', color: '#fb923c', roles: ['superadmin','admin'] },
+  { to: '/users',    icon: Users, label: 'Quản lý Tài khoản',  color: '#f472b6', roles: ['superadmin'] },
+  { to: '/settings', icon: Bell,  label: 'Cài đặt Cảnh báo',   color: '#fb923c', roles: ['superadmin','admin'] },
 ]
 
 const SIDEBAR_W = 230
@@ -38,7 +38,7 @@ export default function Layout() {
 
   // Vai trò hiện tại: superadmin | admin | member
   const role: string = user?.is_staff ? 'superadmin' : (user?.client_role ?? 'member')
-  const roleLabel = role === 'superadmin' ? 'Superadmin' : role === 'admin' ? 'Client Admin' : 'Member'
+  const roleLabel = role === 'superadmin' ? 'Quản trị hệ thống' : role === 'admin' ? 'Quản trị dự án' : 'Thành viên'
 
   const NavContent = () => (
     <div style={{ display:'flex', flexDirection:'column', height:'100%' }}>
@@ -53,9 +53,11 @@ export default function Layout() {
             <div style={{ fontSize:'.6rem', color:'var(--text-muted)', fontWeight:500, letterSpacing:'.03em' }}>Camera Management</div>
           </div>
         </NavLink>
-        <button className="lg:hidden" onClick={()=>setMobileOpen(false)} style={{ background:'none', border:'none', cursor:'pointer', color:'var(--text-muted)', display:'flex' }}>
-          <X size={18}/>
-        </button>
+        {mobileOpen && (
+          <button onClick={()=>setMobileOpen(false)} style={{ background:'none', border:'none', cursor:'pointer', color:'var(--text-muted)', display:'flex' }}>
+            <X size={18}/>
+          </button>
+        )}
       </div>
 
       {/* Nav */}
@@ -115,13 +117,13 @@ export default function Layout() {
             <div style={{ fontSize:'.8rem', fontWeight:700, color:'var(--text-primary)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{user?.username}</div>
             <div style={{ fontSize:'.65rem', color: user?.is_staff?'var(--accent)':'var(--text-muted)', fontWeight:600 }}>{roleLabel}</div>
           </div>
-          <button onClick={handleLogout} title="Logout" style={{ background:'none', border:'none', cursor:'pointer', color:'var(--text-muted)', display:'flex', padding:4 }}>
+          <button onClick={handleLogout} title="Đăng xuất" style={{ background:'none', border:'none', cursor:'pointer', color:'var(--text-muted)', display:'flex', padding:4 }}>
             <LogOut size={14}/>
           </button>
         </div>
         <button onClick={toggle} style={{ width:'100%', display:'flex', alignItems:'center', justifyContent:'center', gap:6, padding:'.38rem', borderRadius:8, fontSize:'.75rem', fontWeight:500, background:'var(--bg-tertiary)', border:'1px solid var(--border-color)', color:'var(--text-muted)', cursor:'pointer' }}>
           {mode==='dark'?<Sun size={13}/>:<Moon size={13}/>}
-          {mode==='dark'?'Light mode':'Dark mode'}
+          {mode==='dark'?'Giao diện Sáng':'Giao diện Tối'}
         </button>
       </div>
     </div>

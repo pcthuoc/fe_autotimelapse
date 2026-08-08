@@ -171,6 +171,7 @@ export interface Media {
   height: number
   thumb_url: string
   view_url: string
+  download_url?: string
 }
 
 export interface MediaDayStat {
@@ -199,6 +200,7 @@ export interface VideoRender {
   frame_interval?: number
   created_at: string
   ready_at: string | null
+  expires_at: string | null
 }
 
 export interface DownloadItem {

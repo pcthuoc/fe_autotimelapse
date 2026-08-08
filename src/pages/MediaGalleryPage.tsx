@@ -1,17 +1,22 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { useState } from 'react'
-import { getMediaGallery, createArchive } from '../api/client'
+import { getMediaGallery, createArchive, deleteMedia, bulkDeleteMedia } from '../api/client'
 import type { Media, MediaDayStat } from '../api/types'
+import { useAuth } from '../contexts/AuthContext'
 import {
   ArrowLeft, Download, CheckSquare, Square, X, ChevronLeft, ChevronRight,
-  Calendar, Clock, FolderArchive, Image as ImageIcon, Search,
+  Calendar, Clock, FolderArchive, Image as ImageIcon, Search, Trash2,
 } from 'lucide-react'
 
 export default function MediaGalleryPage() {
   const { cameraPk } = useParams<{ cameraPk: string }>()
   const navigate = useNavigate()
   const qc = useQueryClient()
+  const { user } = useAuth()
+  const canManage  = !!user?.is_staff || user?.client_role === 'admin'
+  const canDownload = canManage || !!user?.perms?.can_download
+  const canSelect  = canManage || canDownload
   const [page, setPage] = useState(1)
 
   // ── Filter state: from datetime → to datetime ─────────────────────────────
@@ -25,6 +30,7 @@ export default function MediaGalleryPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [lightbox, setLightbox] = useState<Media | null>(null)
   const [archiving, setArchiving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const [toast, setToast] = useState('')
 
   // Build ISO datetime strings
@@ -83,6 +89,26 @@ export default function MediaGalleryPage() {
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 5000) }
 
+  const deleteSingle = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (!confirm('Xóa ảnh này?')) return
+    try { await deleteMedia(id); qc.invalidateQueries({ queryKey: ['gallery', cameraPk] }); showToast('Đã xóa ảnh') }
+    catch { showToast('Lỗi khi xóa') }
+  }
+
+  const deleteSelected = async () => {
+    if (selected.size === 0) return
+    if (!confirm(`Xóa ${selected.size} ảnh đã chọn? Không thể hoàn tác.`)) return
+    setDeleting(true)
+    try {
+      const r = await bulkDeleteMedia(Array.from(selected))
+      qc.invalidateQueries({ queryKey: ['gallery', cameraPk] })
+      setSelected(new Set())
+      showToast(`Đã xóa ${r.data.deleted} ảnh`)
+    } catch { showToast('Lỗi khi xóa') }
+    setDeleting(false)
+  }
+
   const downloadSelected = async () => {
     if (selected.size === 0) return
     setArchiving(true)
@@ -134,10 +160,16 @@ export default function MediaGalleryPage() {
           <ArrowLeft size={16} />
         </button>
         <div style={{ flex: 1 }}>
-          <h1 style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--text-primary)', margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <ImageIcon size={17} style={{ color: '#22d3ee' }} />
-            {data?.camera_name ?? '…'}
-            <code style={{ fontSize: '.72rem', color: '#60a5fa' }}>{data?.camera_code}</code>
+          <h1 style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--text-primary)', margin: 0, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <ImageIcon size={17} style={{ color: '#22d3ee' }} />
+              {data?.camera_name ?? '…'}
+            </span>
+            {data?.camera_code && (
+              <code style={{ fontSize: '.7rem', color: '#60a5fa', background: 'rgba(96,165,250,0.12)', padding: '2px 7px', borderRadius: 6, border: '1px solid rgba(96,165,250,0.25)', whiteSpace: 'nowrap' }}>
+                {data.camera_code}
+              </code>
+            )}
           </h1>
           <p style={{ fontSize: '.73rem', color: 'var(--text-secondary)', margin: '2px 0 0' }}>
             {data?.site_name && <>{data.site_name} · </>}
@@ -148,7 +180,7 @@ export default function MediaGalleryPage() {
           </p>
         </div>
         <Link to="/downloads" className="atl-btn" style={{ fontSize: '.75rem', textDecoration: 'none' }}>
-          <FolderArchive size={13} style={{ marginRight: 5 }} />Downloads
+          <FolderArchive size={13} style={{ marginRight: 5 }} />Tải về
         </Link>
       </div>
 
@@ -216,8 +248,8 @@ export default function MediaGalleryPage() {
 
               <div style={{ flex: 1 }} />
 
-              {/* Selection actions */}
-              {selected.size > 0 ? (
+              {/* Selection actions — chỉ hiện khi có quyền */}
+              {canSelect && selected.size > 0 ? (
                 <>
                   <span style={{ fontSize: '.72rem', padding: '3px 10px', borderRadius: 10, background: 'rgba(96,165,250,.12)', color: '#60a5fa', fontWeight: 700 }}>
                     {selected.size} đã chọn
@@ -225,24 +257,35 @@ export default function MediaGalleryPage() {
                   <button className="atl-btn ghost" style={{ fontSize: '.72rem' }} onClick={() => setSelected(new Set())}>
                     <X size={11} style={{ marginRight: 3 }} />Bỏ chọn
                   </button>
-                  <button className="atl-btn primary" style={{ fontSize: '.75rem' }} disabled={archiving} onClick={downloadSelected}>
-                    <Download size={12} style={{ marginRight: 4 }} />
-                    {archiving ? 'Đang tạo ZIP…' : `Tải ${selected.size} ảnh (ZIP)`}
-                  </button>
+                  {canDownload && (
+                    <button className="atl-btn primary" style={{ fontSize: '.75rem' }} disabled={archiving} onClick={downloadSelected}>
+                      <Download size={12} style={{ marginRight: 4 }} />
+                      {archiving ? 'Đang tạo ZIP…' : `Tải ${selected.size} ảnh (ZIP)`}
+                    </button>
+                  )}
+                  {canManage && (
+                    <button className="atl-btn" style={{ fontSize: '.75rem', color: '#f87171', borderColor: 'rgba(248,113,113,.35)' }}
+                            disabled={deleting} onClick={deleteSelected}>
+                      <Trash2 size={12} style={{ marginRight: 4 }} />
+                      {deleting ? 'Đang xóa…' : `Xóa ${selected.size} ảnh`}
+                    </button>
+                  )}
                 </>
-              ) : (
+              ) : canSelect ? (
                 <>
                   <button className="atl-btn" style={{ fontSize: '.72rem' }}
                           onClick={() => setSelected(new Set(photos.map((p) => p.id)))}>
                     <CheckSquare size={12} style={{ marginRight: 4 }} />Chọn hết trang
                   </button>
-                  <button className="atl-btn" style={{ fontSize: '.72rem', color: '#22d3ee', borderColor: 'rgba(34,211,238,.35)' }}
-                          disabled={archiving} onClick={downloadRange}>
-                    <FolderArchive size={12} style={{ marginRight: 4 }} />
-                    {hasFilter ? 'Tải khoảng đã lọc (ZIP)' : 'Tải tất cả (ZIP)'}
-                  </button>
+                  {canDownload && (
+                    <button className="atl-btn" style={{ fontSize: '.72rem', color: '#22d3ee', borderColor: 'rgba(34,211,238,.35)' }}
+                            disabled={archiving} onClick={downloadRange}>
+                      <FolderArchive size={12} style={{ marginRight: 4 }} />
+                      {hasFilter ? 'Tải khoảng đã lọc (ZIP)' : 'Tải tất cả (ZIP)'}
+                    </button>
+                  )}
                 </>
-              )}
+              ) : null}
             </div>
           </div>
 
@@ -265,10 +308,19 @@ export default function MediaGalleryPage() {
                       {new Date(photo.taken_at).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}
                     </span>
                   </div>
-                  <button style={{ position: 'absolute', top: 5, right: 5, background: sel ? 'rgba(96,165,250,.9)' : 'rgba(0,0,0,.45)', border: 'none', cursor: 'pointer', color: '#fff', padding: 3, borderRadius: 6, display: 'flex' }}
-                          onClick={(e) => { e.stopPropagation(); toggleSelect(photo.id) }}>
-                    {sel ? <CheckSquare size={14} /> : <Square size={14} />}
-                  </button>
+                  {canSelect && (
+                    <button style={{ position: 'absolute', top: 5, right: 5, background: sel ? 'rgba(96,165,250,.9)' : 'rgba(0,0,0,.45)', border: 'none', cursor: 'pointer', color: '#fff', padding: 3, borderRadius: 6, display: 'flex' }}
+                            onClick={(e) => { e.stopPropagation(); toggleSelect(photo.id) }}>
+                      {sel ? <CheckSquare size={14} /> : <Square size={14} />}
+                    </button>
+                  )}
+                  {canManage && (
+                    <button style={{ position: 'absolute', top: 5, left: 5, background: 'rgba(248,113,113,.75)', border: 'none', cursor: 'pointer', color: '#fff', padding: 3, borderRadius: 6, display: 'flex', opacity: 0, transition: 'opacity .15s' }}
+                            className="photo-delete-btn"
+                            onClick={(e) => deleteSingle(photo.id, e)}>
+                      <Trash2 size={13} />
+                    </button>
+                  )}
                 </div>
               )
             })}
@@ -282,18 +334,39 @@ export default function MediaGalleryPage() {
             </div>
           )}
 
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 16 }}>
-              <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="atl-btn" style={{ fontSize: '.78rem' }}>
-                <ChevronLeft size={14} /> Trước
-              </button>
-              <span style={{ fontSize: '.85rem', color: 'var(--text-secondary)' }}>{page} / {totalPages}</span>
-              <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages} className="atl-btn" style={{ fontSize: '.78rem' }}>
-                Sau <ChevronRight size={14} />
-              </button>
-            </div>
-          )}
+          {/* Pagination số */}
+          {totalPages > 1 && (() => {
+            const pages: (number | '...')[] = []
+            if (totalPages <= 7) {
+              for (let i = 1; i <= totalPages; i++) pages.push(i)
+            } else {
+              pages.push(1)
+              if (page > 3) pages.push('...')
+              for (let i = Math.max(2, page - 1); i <= Math.min(totalPages - 1, page + 1); i++) pages.push(i)
+              if (page < totalPages - 2) pages.push('...')
+              pages.push(totalPages)
+            }
+            return (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, marginTop: 16, flexWrap: 'wrap' }}>
+                <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="atl-btn" style={{ fontSize: '.75rem', padding: '4px 10px' }}>
+                  <ChevronLeft size={13} />
+                </button>
+                {pages.map((p, i) => p === '...' ? (
+                  <span key={`dots-${i}`} style={{ fontSize: '.78rem', color: 'var(--text-muted)', padding: '0 2px' }}>…</span>
+                ) : (
+                  <button key={p} onClick={() => setPage(p as number)}
+                          className={`atl-btn${p === page ? ' primary' : ''}`}
+                          style={{ fontSize: '.78rem', padding: '4px 10px', minWidth: 34,
+                                   fontWeight: p === page ? 800 : 400 }}>
+                    {p}
+                  </button>
+                ))}
+                <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages} className="atl-btn" style={{ fontSize: '.75rem', padding: '4px 10px' }}>
+                  <ChevronRight size={13} />
+                </button>
+              </div>
+            )
+          })()}
         </div>
 
         {/* RIGHT: day stats sidebar */}
@@ -352,11 +425,16 @@ export default function MediaGalleryPage() {
               {new Date(lightbox.taken_at).toLocaleString('vi-VN')}
               {lightbox.width ? ` · ${lightbox.width}×${lightbox.height}` : ''}
             </span>
-            <a href={lightbox.view_url} download target="_blank" rel="noreferrer"
-               style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '.8rem', padding: '.4rem .8rem', borderRadius: 8, background: 'var(--accent)', color: '#fff', textDecoration: 'none', fontWeight: 700 }}
-               onClick={e => e.stopPropagation()}>
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                // Backend redirect → presigned URL với Content-Disposition: attachment
+                window.location.href = `/api/v1/media/${lightbox.id}/download/`
+              }}
+              style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '.8rem', padding: '.4rem .8rem', borderRadius: 8, background: 'var(--accent)', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700 }}
+            >
               <Download size={13} /> Tải về
-            </a>
+            </button>
           </div>
         </div>
       )}
