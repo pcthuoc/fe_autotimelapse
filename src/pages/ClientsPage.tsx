@@ -242,8 +242,10 @@ export default function ClientsPage() {
                               style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '.68rem', padding: '2px 8px', borderRadius: 6,
                                        background: cm.status === 'active' ? 'rgba(52,211,153,.1)' : 'var(--bg-tertiary)',
                                        color: cm.status === 'active' ? '#34d399' : 'var(--text-muted)',
-                                       border: '1px solid var(--border-color)' }}>
-                          <CameraIcon size={9} />{cm.code}
+                                       border: '1px solid var(--border-color)' }}
+                              title={`Mã: ${cm.code}`}
+                        >
+                          <CameraIcon size={9} />{cm.name || cm.code}
                         </Link>
                       ))}
                     </div>

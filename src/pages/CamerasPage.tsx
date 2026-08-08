@@ -1257,7 +1257,7 @@ function CameraInfoModal({ cam, onClose, onOpenLive, canManage = false }: { cam:
                 className="atl-btn ghost"
                 style={{ fontSize:'.75rem', color:'#ef4444', borderColor:'rgba(239,68,68,.3)' }}
                 disabled={deleteMutation.isPending}
-                onClick={handleDeleteCamera}
+                onClick={() => setShowDeleteConfirm(true)}
               >
                 <Trash2 size={13} style={{ marginRight:4 }} />
                 {deleteMutation.isPending ? 'Đang xóa…' : 'Xóa Camera'}

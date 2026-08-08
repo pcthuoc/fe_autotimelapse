@@ -133,9 +133,14 @@ export default function RendersPage() {
                 <Film size={19} />
               </div>
               <div style={{ flex: 1, minWidth: 200 }}>
-                <div style={{ fontSize: '.85rem', fontWeight: 700, color: 'var(--text-primary)' }}>
-                  <code style={{ color: '#a78bfa', marginRight: 6 }}>{r.camera_code || r.camera_id.slice(0, 8)}</code>
-                  {r.date_from} → {r.date_to}
+                <div style={{ fontSize: '.85rem', fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                  <span>{r.camera_name || r.camera_code || 'Camera'}</span>
+                  {r.camera_code && (
+                    <code style={{ fontSize: '.68rem', color: '#a78bfa', background: 'rgba(167,139,250,.12)', padding: '1px 6px', borderRadius: 4, fontFamily: 'monospace' }}>
+                      {r.camera_code}
+                    </code>
+                  )}
+                  <span style={{ fontSize: '.78rem', fontWeight: 500, color: 'var(--text-secondary)' }}>· {r.date_from} → {r.date_to}</span>
                 </div>
                 <div style={{ fontSize: '.7rem', color: 'var(--text-muted)', marginTop: 2 }}>
                   {r.fps}fps · {r.resolution}

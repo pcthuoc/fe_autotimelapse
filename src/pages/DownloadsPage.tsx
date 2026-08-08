@@ -65,8 +65,12 @@ export default function DownloadsPage() {
                   {item.kind === 'render' ? <Film size={18} /> : <FolderArchive size={18} />}
                 </div>
                 <div style={{ flex: 1, minWidth: 180 }}>
-                  <div style={{ fontSize: '.83rem', fontWeight: 700, color: 'var(--text-primary)' }}>
-                    <code style={{ color: '#60a5fa', marginRight: 6 }}>{item.camera_code}</code>{item.title}
+                  <div style={{ fontSize: '.85rem', fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    <span>{item.camera_name || item.camera_code}</span>
+                    <code style={{ fontSize: '.68rem', color: '#60a5fa', background: 'rgba(96,165,250,.12)', padding: '1px 6px', borderRadius: 4, fontFamily: 'monospace' }}>
+                      {item.camera_code}
+                    </code>
+                    <span style={{ fontSize: '.78rem', fontWeight: 500, color: 'var(--text-secondary)' }}>· {item.title}</span>
                   </div>
                   <div style={{ fontSize: '.7rem', color: 'var(--text-muted)', marginTop: 2 }}>
                     {item.meta}
