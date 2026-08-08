@@ -4,6 +4,7 @@ import { getRenders, getCameras, createRender, deleteRender } from '../api/clien
 import type { VideoRender, Camera } from '../api/types'
 import { useAuth } from '../contexts/AuthContext'
 import { Film, Plus, X, Download, Clock, CheckCircle2, XCircle, RefreshCw, Play, Trash2 } from 'lucide-react'
+import ConfirmModal from '../components/ConfirmModal'
 
 function fmtBytes(b: number | null) {
   if (!b) return '—'
@@ -48,6 +49,8 @@ export default function RendersPage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [watch, setWatch] = useState<VideoRender | null>(null)
+  const [confirmDelete, setConfirmDelete] = useState<VideoRender | null>(null)
+  const [deleting, setDeleting] = useState(false)
   const [form, setForm] = useState({
     camera_id: '', date_from: weekAgo(), date_to: today(),
     fps: 24, resolution: '1920x1080', frame_interval: 0,
@@ -154,27 +157,29 @@ export default function RendersPage() {
                 </div>
               )}
 
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '.7rem', fontWeight: 700, color: st.color, background: st.bg, padding: '3px 10px', borderRadius: 12 }}>
-                {r.status === 'ready' ? <CheckCircle2 size={11} /> : (r.status === 'failed' || r.status === 'expired') ? <XCircle size={11} /> : <Clock size={11} />}
-                {st.label}
-              </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', flexShrink: 0 }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '.7rem', fontWeight: 700, color: st.color, background: st.bg, padding: '4px 9px', borderRadius: 12 }}>
+                  {r.status === 'ready' ? <CheckCircle2 size={11} /> : (r.status === 'failed' || r.status === 'expired') ? <XCircle size={11} /> : <Clock size={11} />}
+                  {st.label}
+                </span>
 
-              {r.download_url && (
-                <>
-                  <button onClick={() => setWatch(r)} className="atl-btn" style={{ fontSize: '.75rem' }}>
-                    <Play size={13} style={{ marginRight: 4 }} />Xem
+                {r.download_url && (
+                  <>
+                    <button onClick={() => setWatch(r)} className="atl-btn" style={{ fontSize: '.75rem', padding: '4px 9px' }}>
+                      <Play size={13} style={{ marginRight: 3 }} />Xem
+                    </button>
+                    <a href={r.download_url} className="atl-btn primary" style={{ fontSize: '.75rem', textDecoration: 'none', padding: '4px 9px' }}>
+                      <Download size={13} style={{ marginRight: 3 }} />Tải video
+                    </a>
+                  </>
+                )}
+
+                {canManage && (
+                  <button onClick={() => setConfirmDelete(r)} className="atl-btn ghost" style={{ fontSize: '.75rem', color: '#ef4444', borderColor: 'rgba(239, 68, 68, 0.3)', padding: '4px 8px' }} title="Xoá video render">
+                    <Trash2 size={13} />
                   </button>
-                  <a href={r.download_url} className="atl-btn primary" style={{ fontSize: '.75rem', textDecoration: 'none' }}>
-                    <Download size={13} style={{ marginRight: 4 }} />Tải video
-                  </a>
-                </>
-              )}
-
-              {canManage && (
-                <button onClick={() => del(r)} className="atl-btn ghost" style={{ fontSize: '.75rem', color: '#f87171', padding: '4px 8px' }} title="Xoá render">
-                  <Trash2 size={13} />
-                </button>
-              )}
+                )}
+              </div>
             </div>
           )
         })}
@@ -314,6 +319,27 @@ export default function RendersPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {confirmDelete && (
+        <ConfirmModal
+          title="Xóa Video Render"
+          message={`Bạn có chắc chắn muốn xóa video render của camera ${confirmDelete.camera_code || ''} (${confirmDelete.date_from} → ${confirmDelete.date_to})? Thao tác này không thể hoàn tác.`}
+          confirmText="Xóa Video"
+          isPending={deleting}
+          onConfirm={async () => {
+            setDeleting(true)
+            try {
+              await deleteRender(confirmDelete.id)
+              qc.invalidateQueries({ queryKey: ['renders'] })
+              qc.invalidateQueries({ queryKey: ['downloads'] })
+              setConfirmDelete(null)
+            } finally {
+              setDeleting(false)
+            }
+          }}
+          onClose={() => setConfirmDelete(null)}
+        />
       )}
     </div>
   )

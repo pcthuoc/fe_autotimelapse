@@ -10,6 +10,7 @@ import {
 import type { Camera, Site } from '../api/types'
 import { useAuth } from '../contexts/AuthContext'
 import CameraLiveModal from '../components/CameraLiveModal'
+import ConfirmModal from '../components/ConfirmModal'
 import {
   Search, Camera as CameraIcon, Wifi, WifiOff,
   X, Plus, RefreshCw, Settings, Building2, Clock, Image as ImageIcon, Shield,
@@ -1083,11 +1084,12 @@ function CameraInfoModal({ cam, onClose, onOpenLive, canManage = false }: { cam:
     timezone: cam.timezone || 'UTC',
   })
   const [copiedField, setCopiedField] = useState<string | null>(null)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
   const brokerHost = window.location.hostname || 'localhost'
   const brokerPortTcp = '1883'
   const brokerPortWs = '8083'
-  const pubTopic = `camera/${formData.code}/data`   // also: /status  /ack
+  const pubTopic = `camera/${formData.code}/data`
   const subTopic = `camera/${formData.code}/cmd`
 
   const handleCopy = (text: string, fieldName: string) => {
@@ -1133,12 +1135,6 @@ function CameraInfoModal({ cam, onClose, onOpenLive, canManage = false }: { cam:
       showToast(err?.response?.data?.detail || 'Không thể xóa camera', 'error')
     }
   })
-
-  const handleDeleteCamera = () => {
-    if (window.confirm(`⚠️ XÁC NHẬN XÓA CAMERA "${cam.name}" (${cam.code})?\n\nThao tác này sẽ xóa toàn bộ dữ liệu & cấu hình camera khỏi hệ thống và không thể hoàn tác.`)) {
-      deleteMutation.mutate()
-    }
-  }
 
   return (
     <div className="modal-overlay" onClick={onClose}>

@@ -7,6 +7,7 @@ import type { Client, Site, ClientMember, Camera } from '../api/types'
 import { useAuth } from '../contexts/AuthContext'
 import { Link } from 'react-router-dom'
 import { Building2, Camera as CameraIcon, FolderOpen, Plus, Pencil, Trash2, X, Phone, Mail, MapPin, Link2, Users, Shield, UserPlus } from 'lucide-react'
+import ConfirmModal from '../components/ConfirmModal'
 
 const EMPTY_FORM = { name: '', contact_name: '', contact_email: '', phone: '', address: '', notes: '' }
 const EMPTY_SITE_FORM = { name: '', location: '', description: '' }
@@ -43,6 +44,13 @@ export default function ClientsPage() {
   const [camForm, setCamForm] = useState(EMPTY_CAM_FORM)
   const [camTargetSite, setCamTargetSite] = useState<{ id: string; name: string } | null>(null)
   const [membersClient, setMembersClient] = useState<Client | null>(null)
+  const [confirmAction, setConfirmAction] = useState<{
+    title: string
+    message: string
+    confirmText?: string
+    onConfirm: () => Promise<void>
+  } | null>(null)
+  const [confirming, setConfirming] = useState(false)
 
   const { data, isLoading } = useQuery<{ results: Client[] }>({
     queryKey: ['clients'],
@@ -83,10 +91,16 @@ export default function ClientsPage() {
     setSaving(false)
   }
 
-  const remove = async (c: Client) => {
-    if (!confirm(`Xoá client "${c.name}"? Công trình sẽ được giữ lại nhưng không còn thuộc client này.`)) return
-    await deleteClient(c.id)
-    qc.invalidateQueries({ queryKey: ['clients'] })
+  const remove = (c: Client) => {
+    setConfirmAction({
+      title: 'Xóa khách hàng',
+      message: `Xoá client "${c.name}"? Công trình sẽ được giữ lại nhưng không còn thuộc client này.`,
+      confirmText: 'Xoá',
+      onConfirm: async () => {
+        await deleteClient(c.id)
+        qc.invalidateQueries({ queryKey: ['clients'] })
+      }
+    })
   }
 
   const doAssign = async (siteId: string, clientId: string | null) => {
@@ -204,8 +218,19 @@ export default function ClientsPage() {
                                 onClick={() => { setCamTargetSite({ id: p.id, name: p.name }); setError(''); setModal('assign_camera') }}>
                           <Link2 size={10} style={{ marginRight: 3 }} />Gán cam
                         </button>
-                        <button className="atl-btn ghost" style={{ padding: '2px 6px', fontSize: '.65rem' }} title="Gỡ khỏi client"
-                                onClick={() => doAssign(p.id, null)}>✕</button>
+                        <button className="atl-btn ghost" style={{ padding: '2px 6px', fontSize: '.65rem' }} title="Gỡ công trình khỏi client"
+                                onClick={() => {
+                                  setConfirmAction({
+                                    title: 'Gỡ công trình khỏi khách hàng',
+                                    message: `Bạn có muốn gỡ công trình "${p.name}" khỏi khách hàng "${c.name}" không?`,
+                                    confirmText: 'Gỡ công trình',
+                                    onConfirm: async () => {
+                                      await assignSiteClient(p.id, null)
+                                      qc.invalidateQueries({ queryKey: ['clients'] })
+                                      qc.invalidateQueries({ queryKey: ['sites'] })
+                                    }
+                                  })
+                                }}>✕</button>
                       </div>
                     )}
                   </div>
@@ -538,6 +563,24 @@ function MembersModal({ client, isSuperadmin, onClose }: { client: Client; isSup
           )}
         </div>
       </div>
+      {confirmAction && (
+        <ConfirmModal
+          title={confirmAction.title}
+          message={confirmAction.message}
+          confirmText={confirmAction.confirmText || 'Xác nhận'}
+          isPending={confirming}
+          onConfirm={async () => {
+            setConfirming(true)
+            try {
+              await confirmAction.onConfirm()
+              setConfirmAction(null)
+            } finally {
+              setConfirming(false)
+            }
+          }}
+          onClose={() => setConfirmAction(null)}
+        />
+      )}
     </div>
   )
 }
