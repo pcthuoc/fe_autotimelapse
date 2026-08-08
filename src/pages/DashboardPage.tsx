@@ -48,15 +48,15 @@ function StatTile({ icon, label, value, sub, color, to }: {
 function WeekChart({ days }: { days: { date: string; count: number }[] }) {
   const max = Math.max(1, ...days.map(d => d.count))
   return (
-    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, height: 120, padding: '0 4px' }}>
+    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, height: 130, padding: '10px 4px 0' }}>
       {days.map((d, i) => {
-        const h = Math.max(4, (d.count / max) * 100)
+        const h = d.count > 0 ? Math.max(8, Math.round((d.count / max) * 72)) : 4
         const isToday = i === days.length - 1
         return (
-          <div key={d.date} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, height: '100%', justifyContent: 'flex-end' }}>
-            <span style={{ fontSize: '.62rem', fontWeight: 700, color: isToday ? '#60a5fa' : 'var(--text-muted)' }}>{d.count}</span>
+          <div key={d.date} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, height: '100%', justifyContent: 'flex-end' }}>
+            <span style={{ fontSize: '.65rem', fontWeight: 700, color: isToday ? '#60a5fa' : 'var(--text-muted)', whiteSpace: 'nowrap' }}>{d.count}</span>
             <div style={{
-              width: '100%', maxWidth: 38, height: `${h}%`, borderRadius: '6px 6px 2px 2px',
+              width: '100%', maxWidth: 36, height: `${h}%`, borderRadius: '6px 6px 2px 2px',
               background: isToday
                 ? 'linear-gradient(180deg,#60a5fa,#3b82f6)'
                 : 'linear-gradient(180deg,rgba(96,165,250,.45),rgba(96,165,250,.18))',
@@ -499,12 +499,12 @@ export default function DashboardPage() {
 
         {/* Recent downloads/notifications */}
         <div style={{ border: '1px solid var(--border-color)', borderRadius: 14, background: 'var(--bg-secondary)', padding: '1rem 1.1rem', display: 'flex', flexDirection: 'column' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Zap size={15} style={{ color: '#22d3ee' }} />
-              <span style={{ fontSize: '.85rem', fontWeight: 800, color: 'var(--text-primary)' }}>Hoạt động gần đây</span>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, flexWrap: 'nowrap', gap: 6 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+              <Zap size={15} style={{ color: '#22d3ee', flexShrink: 0 }} />
+              <span style={{ fontSize: '.85rem', fontWeight: 800, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Hoạt động gần đây</span>
             </div>
-            <Link to="/downloads" style={{ fontSize: '.7rem', color: '#60a5fa', textDecoration: 'none', fontWeight: 700 }}>
+            <Link to="/downloads" style={{ fontSize: '.7rem', color: '#60a5fa', textDecoration: 'none', fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0 }}>
               Tất cả <ArrowRight size={10} style={{ display: 'inline' }} />
             </Link>
           </div>
@@ -514,17 +514,17 @@ export default function DashboardPage() {
             )}
             {recentDownloads.map(item => (
               <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '.73rem' }}>
-                <span style={{ width: 26, height: 26, borderRadius: 7, flexShrink: 0, background: `${STATUS_COLOR[item.status]}1a`, color: STATUS_COLOR[item.status], display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <span style={{ width: 26, height: 26, borderRadius: 7, flexShrink: 0, background: `${STATUS_COLOR[item.status] || '#60a5fa'}1a`, color: STATUS_COLOR[item.status] || '#60a5fa', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   {item.kind === 'render' ? <Film size={12} /> : <FolderArchive size={12} />}
                 </span>
                 <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
-                  <div style={{ color: 'var(--text-primary)', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow:'ellipsis' }}>
-                    {item.camera_code} · {item.title}
+                  <div style={{ color: 'var(--text-primary)', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {item.camera_code ? `${item.camera_code} · ` : ''}{item.title}
                   </div>
                   <div style={{ color: 'var(--text-muted)', fontSize: '.65rem' }}>{new Date(item.created_at).toLocaleString('vi-VN')}</div>
                 </div>
-                <span style={{ fontSize: '.62rem', fontWeight: 700, color: STATUS_COLOR[item.status] }}>
-                  {item.status === 'processing' ? `${item.progress}%` : item.status}
+                <span style={{ fontSize: '.62rem', fontWeight: 700, color: STATUS_COLOR[item.status] || '#34d399', flexShrink: 0, whiteSpace: 'nowrap' }}>
+                  {item.status === 'processing' ? `${item.progress ?? 0}%` : item.status === 'ready' ? 'Hoàn tất' : item.status === 'failed' ? 'Thất bại' : 'Chờ xử lý'}
                 </span>
               </div>
             ))}
