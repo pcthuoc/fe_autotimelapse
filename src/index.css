@@ -442,21 +442,29 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); }
 /* ── Dashboard & Media Gallery Mobile Enhancements ── */
 .dash-stats-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
   margin-bottom: 16px;
+  max-width: 100%;
 }
 
 .dash-middle-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.6fr) minmax(280px, 1fr);
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
   gap: 14px;
   margin-bottom: 16px;
+  max-width: 100%;
+}
+
+.dash-middle-grid > div {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .site-card-item {
-  flex: 0 0 300px;
-  max-width: 300px;
+  flex: 0 0 280px;
+  max-width: 280px;
   scroll-snap-align: start;
 }
 
@@ -477,7 +485,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); }
 
 .gallery-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
   gap: 8px;
 }
 
@@ -495,10 +503,17 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); }
   overflow-y: auto;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 1024px) {
   .dash-middle-grid {
     grid-template-columns: 1fr;
     gap: 12px;
+  }
+}
+
+@media (max-width: 768px) {
+  .dash-stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
   }
   .gallery-main-layout {
     grid-template-columns: 1fr;

@@ -149,8 +149,8 @@ export default function Layout() {
              style={{ width:SIDEBAR_W, background:'var(--bg-sidebar)', borderRight:'1px solid var(--border-color)' }}>
         <NavContent/>
       </aside>
-      <main className="lg:ml-[230px] min-h-screen w-full lg:w-[calc(100%-230px)] min-w-0 max-w-full box-border">
-        <div style={{ padding:'1.25rem 1.5rem', width:'100%', boxSizing:'border-box' }}>
+      <main className="lg:ml-[230px] min-h-screen w-full lg:w-[calc(100%-230px)] min-w-0 max-w-full box-border overflow-x-hidden">
+        <div className="p-3 sm:p-5 w-full box-border max-w-full overflow-hidden">
           <Outlet/>
         </div>
       </main>
