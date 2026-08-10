@@ -757,23 +757,17 @@ function CameraDeviceModal({ cam, onClose, canManage = true, onOpenSchedule }: {
               {/* Device settings */}
               <div style={{ minWidth:200 }}>
                 <div className="section-label">SETTINGS</div>
-                <label style={{ fontSize:'.72rem', color:'var(--text-muted)', display:'block', marginBottom:4 }}>Capture interval</label>
-                <div style={{ display:'flex', alignItems:'center', gap:5, marginBottom:10 }}>
-                  <input type="number" min={30} max={86400} value={intervalValue} onChange={e=>setIntervalValue(Number(e.target.value))} className="atl-input" style={{ width:72 }} />
-                  <span style={{ fontSize:'.72rem', color:'var(--text-muted)' }}>sec</span>
-                  <button className="atl-btn primary" style={{ fontSize:'.72rem', whiteSpace:'nowrap' }} disabled={savingDev} onClick={saveDevSettings}>
-                    {savingDev ? '…' : 'Lưu lại'}
-                  </button>
-                </div>
-                <div style={{ fontSize:'.65rem', color:'var(--text-muted)', marginBottom:10 }}>Applied on next device check-in.</div>
                 <button
                   type="button"
                   className="atl-btn"
-                  style={{ width:'100%', fontSize:'.75rem', display:'inline-flex', alignItems:'center', justifyContent:'center', gap:6, background:'rgba(16,185,129,0.1)', borderColor:'rgba(16,185,129,0.3)', color:'#10b981', fontWeight:700 }}
+                  style={{ width:'100%', padding:'.6rem 1rem', fontSize:'.78rem', display:'inline-flex', alignItems:'center', justifyContent:'center', gap:6, background:'rgba(16,185,129,0.1)', borderColor:'rgba(16,185,129,0.3)', color:'#10b981', fontWeight:700 }}
                   onClick={()=>onOpenSchedule?.()}
                 >
-                  <Clock size={14}/> Lịch hẹn giờ chụp
+                  <Clock size={15}/> Quản lý lịch hẹn giờ chụp
                 </button>
+                <div style={{ fontSize:'.65rem', color:'var(--text-muted)', marginTop:6, textAlign:'center' }}>
+                  Cài đặt khung giờ & chu kỳ chụp tự động
+                </div>
               </div>
             </div>
 
