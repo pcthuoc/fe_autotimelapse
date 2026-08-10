@@ -7,6 +7,7 @@ import { X, Clock, Plus, Trash2, Edit2, Check, Calendar, Power } from 'lucide-re
 interface CameraScheduleModalProps {
   camera: Camera
   onClose: () => void
+  canManage?: boolean
 }
 
 const WEEK_DAYS = [
@@ -26,7 +27,7 @@ function fmtInterval(sec: number) {
   return `${sec} giây`
 }
 
-export default function CameraScheduleModal({ camera, onClose }: CameraScheduleModalProps) {
+export default function CameraScheduleModal({ camera, onClose, canManage = true }: CameraScheduleModalProps) {
   const qc = useQueryClient()
   const [showForm, setShowForm] = useState(false)
   const [editingRule, setEditingRule] = useState<CameraScheduleRule | null>(null)
@@ -173,22 +174,24 @@ export default function CameraScheduleModal({ camera, onClose }: CameraScheduleM
               <Clock size={20} />
             </div>
             <div>
-              <div style={{ fontWeight: 800, fontSize: '1rem', lineHeight: 1.2 }}>Lịch hẹn giờ chụp ảnh</div>
-              <div style={{ fontSize: '.75rem', color: 'var(--text-muted)', marginTop: 2 }}>
-                {camera.name} · <code style={{ color: 'var(--accent-light)' }}>{camera.code}</code>
-              </div>
+              <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800 }}>
+                Lịch hẹn giờ chụp ảnh {!canManage && <span style={{ fontSize: '.72rem', color: 'var(--text-muted)', fontWeight: 500 }}>(Chế độ xem)</span>}
+              </h3>
+              <span style={{ fontSize: '.72rem', color: 'var(--text-muted)' }}>
+                {camera.name} ({camera.code})
+              </span>
             </div>
           </div>
 
           <button
             onClick={onClose}
             style={{
-              background: 'none',
-              border: 'none',
+              background: 'var(--bg-tertiary)',
+              border: '1px solid var(--border-color)',
               color: 'var(--text-muted)',
+              borderRadius: 8,
+              padding: '6px',
               cursor: 'pointer',
-              padding: 4,
-              borderRadius: 6,
             }}
           >
             <X size={18} />
@@ -203,27 +206,29 @@ export default function CameraScheduleModal({ camera, onClose }: CameraScheduleM
               <span style={{ fontSize: '.8rem', color: 'var(--text-muted)', fontWeight: 600 }}>
                 {schedules.length} khung giờ cài đặt
               </span>
-              <button
-                onClick={() => {
-                  setEditingRule(null)
-                  setShowForm(true)
-                }}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  padding: '6px 14px',
-                  borderRadius: 8,
-                  background: 'linear-gradient(135deg, #10b981, #059669)',
-                  color: '#fff',
-                  border: 'none',
-                  fontSize: '.78rem',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                }}
-              >
-                <Plus size={15} /> Thêm khung giờ
-              </button>
+              {canManage && (
+                <button
+                  onClick={() => {
+                    setEditingRule(null)
+                    setShowForm(true)
+                  }}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '6px 14px',
+                    borderRadius: 8,
+                    background: 'linear-gradient(135deg, #10b981, #059669)',
+                    color: '#fff',
+                    border: 'none',
+                    fontSize: '.78rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                  }}
+                >
+                  <Plus size={15} /> Thêm khung giờ
+                </button>
+              )}
             </div>
           )}
 
@@ -412,7 +417,8 @@ export default function CameraScheduleModal({ camera, onClose }: CameraScheduleM
                   {/* Left info */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1 }}>
                     <button
-                      onClick={() => updateMut.mutate({ id: rule.id, data: { is_enabled: !rule.is_enabled } })}
+                      disabled={!canManage}
+                      onClick={() => canManage && updateMut.mutate({ id: rule.id, data: { is_enabled: !rule.is_enabled } })}
                       style={{
                         width: 38,
                         height: 38,
@@ -420,13 +426,13 @@ export default function CameraScheduleModal({ camera, onClose }: CameraScheduleM
                         border: rule.is_enabled ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid var(--border-color)',
                         background: rule.is_enabled ? 'rgba(16, 185, 129, 0.15)' : 'var(--bg-tertiary)',
                         color: rule.is_enabled ? '#10b981' : 'var(--text-muted)',
-                        cursor: 'pointer',
+                        cursor: canManage ? 'pointer' : 'default',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
                         flexShrink: 0,
                       }}
-                      title={rule.is_enabled ? 'Đang bật — Bấm để tắt' : 'Đang tắt — Bấm để bật'}
+                      title={!canManage ? (rule.is_enabled ? 'Đang bật' : 'Đang tắt') : (rule.is_enabled ? 'Đang bật — Bấm để tắt' : 'Đang tắt — Bấm để bật')}
                     >
                       <Power size={18} />
                     </button>
@@ -479,41 +485,43 @@ export default function CameraScheduleModal({ camera, onClose }: CameraScheduleM
                     </div>
                   </div>
 
-                  {/* Actions */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <button
-                      onClick={() => startEdit(rule)}
-                      style={{
-                        background: 'var(--bg-tertiary)',
-                        border: '1px solid var(--border-color)',
-                        color: 'var(--text-primary)',
-                        borderRadius: 8,
-                        padding: '6px 8px',
-                        cursor: 'pointer',
-                      }}
-                      title="Chỉnh sửa"
-                    >
-                      <Edit2 size={14} />
-                    </button>
-                    <button
-                      onClick={() => {
-                        if (confirm(`Xóa khung giờ "${rule.name}"?`)) {
-                          deleteMut.mutate(rule.id)
-                        }
-                      }}
-                      style={{
-                        background: 'rgba(239, 68, 68, 0.15)',
-                        border: '1px solid rgba(239, 68, 68, 0.3)',
-                        color: '#ef4444',
-                        borderRadius: 8,
-                        padding: '6px 8px',
-                        cursor: 'pointer',
-                      }}
-                      title="Xóa"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
+                  {/* Actions (Admin only) */}
+                  {canManage && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <button
+                        onClick={() => startEdit(rule)}
+                        style={{
+                          background: 'var(--bg-tertiary)',
+                          border: '1px solid var(--border-color)',
+                          color: 'var(--text-primary)',
+                          borderRadius: 8,
+                          padding: '6px 8px',
+                          cursor: 'pointer',
+                        }}
+                        title="Chỉnh sửa"
+                      >
+                        <Edit2 size={14} />
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (confirm(`Xóa khung giờ "${rule.name}"?`)) {
+                            deleteMut.mutate(rule.id)
+                          }
+                        }}
+                        style={{
+                          background: 'rgba(239, 68, 68, 0.15)',
+                          border: '1px solid rgba(239, 68, 68, 0.3)',
+                          color: '#ef4444',
+                          borderRadius: 8,
+                          padding: '6px 8px',
+                          cursor: 'pointer',
+                        }}
+                        title="Xóa"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
