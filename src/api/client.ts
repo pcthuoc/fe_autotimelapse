@@ -58,6 +58,14 @@ export const getCameraSimConfig = (pk: string) => api.get(`/cameras/${pk}/simcon
 
 export const getCameraMqttStatus = (pk: string) => api.get(`/cameras/${pk}/mqtt-register/`)
 
+export const getCameraSchedules = (camId: string) => api.get(`/cameras/${camId}/schedules/`)
+
+export const createCameraSchedule = (camId: string, data: Record<string, unknown>) => api.post(`/cameras/${camId}/schedules/`, data)
+
+export const updateCameraSchedule = (camId: string, schedId: string, data: Record<string, unknown>) => api.patch(`/cameras/${camId}/schedules/${schedId}/`, data)
+
+export const deleteCameraSchedule = (camId: string, schedId: string) => api.delete(`/cameras/${camId}/schedules/${schedId}/`)
+
 export const registerCameraMqtt = (pk: string) => api.post(`/cameras/${pk}/mqtt-register/`)
 
 export const powerOnCM4 = (pk: string) => api.post(`/cameras/${pk}/power-on-cm4/`)

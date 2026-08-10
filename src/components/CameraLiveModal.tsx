@@ -58,13 +58,13 @@ export default function CameraLiveModal({ camId, initialCam, onClose }: CameraLi
     timer: null as ReturnType<typeof setTimeout> | null,
   })
 
-  // Fetch camera details if not fully provided
+  // Fetch camera details to keep online status up-to-date
   const { data: camData } = useQuery<Camera>({
     queryKey: ['camera', camId],
     queryFn: () => getCamera(camId).then((r) => r.data),
-    enabled: !initialCam,
+    refetchInterval: 15_000,
   })
-  const camera = initialCam || camData
+  const camera = camData || initialCam
 
   // Fetch device telemetry
   const { data: deviceData } = useQuery({
@@ -257,10 +257,10 @@ export default function CameraLiveModal({ camId, initialCam, onClose }: CameraLi
         ref={containerRef}
         style={{
           position: 'relative',
-          width: '100%',
-          maxWidth: 1200,
+          width: '94vw',
+          maxWidth: 1120,
           height: '100%',
-          maxHeight: '90vh',
+          maxHeight: '92vh',
           display: 'flex',
           flexDirection: 'column',
           background: '#0d1117',
@@ -437,8 +437,9 @@ export default function CameraLiveModal({ camId, initialCam, onClose }: CameraLi
                 src={liveFrameUrl}
                 alt="Live Stream Frame"
                 style={{
-                  maxWidth: '100%',
-                  maxHeight: '100%',
+                  width: '100%',
+                  height: '100%',
+                  maxHeight: '76vh',
                   objectFit: 'contain',
                   boxShadow: '0 0 40px rgba(0, 0, 0, 0.8)',
                   zIndex: 2,
@@ -470,16 +471,28 @@ export default function CameraLiveModal({ camId, initialCam, onClose }: CameraLi
                 </span>
               </div>
             )
-          ) : latestPhoto?.view_url ? (
+          ) : (latestPhoto?.view_url || latestPhoto?.thumb_url) ? (
             <img
-              src={latestPhoto.view_url}
+              src={latestPhoto.view_url || latestPhoto.thumb_url || ''}
               alt="Latest Frame"
               style={{
-                maxWidth: '100%',
-                maxHeight: '100%',
+                width: '100%',
+                height: '100%',
+                maxHeight: '76vh',
                 objectFit: 'contain',
                 boxShadow: '0 0 30px rgba(0,0,0,0.6)',
                 zIndex: 2,
+                cursor: 'pointer',
+              }}
+              onClick={() => {
+                const targetUrl = latestPhoto.view_url || latestPhoto.thumb_url
+                if (targetUrl) window.open(targetUrl, '_blank')
+              }}
+              onError={(e) => {
+                const fallback = latestPhoto.thumb_url || latestPhoto.view_url
+                if (fallback && e.currentTarget.src !== fallback) {
+                  e.currentTarget.src = fallback
+                }
               }}
             />
           ) : (
@@ -660,8 +673,55 @@ export default function CameraLiveModal({ camId, initialCam, onClose }: CameraLi
             )}
           </div>
 
+          {/* Last Frame thumbnail pill — ở giữa footer */}
+          {(latestPhoto?.thumb_url || latestPhoto?.view_url) && !liveOn && (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '4px 10px 4px 5px',
+                borderRadius: 9,
+                background: 'rgba(255,255,255,0.05)',
+                border: '1px solid rgba(255,255,255,0.1)',
+                cursor: 'pointer',
+                flexShrink: 0,
+              }}
+              title="Bấm để xem ảnh gốc"
+              onClick={() => {
+                const url = latestPhoto.view_url || latestPhoto.thumb_url
+                if (url) window.open(url, '_blank')
+              }}
+            >
+              <img
+                src={latestPhoto.thumb_url || latestPhoto.view_url}
+                alt="thumb"
+                style={{
+                  width: 42, height: 30, objectFit: 'cover',
+                  borderRadius: 6, border: '1px solid rgba(255,255,255,0.15)',
+                  flexShrink: 0, display: 'block',
+                }}
+                onError={(e) => {
+                  if (latestPhoto.view_url && e.currentTarget.src !== latestPhoto.view_url) {
+                    e.currentTarget.src = latestPhoto.view_url
+                  }
+                }}
+              />
+              <div style={{ lineHeight: 1.35 }}>
+                <div style={{ fontSize: '.58rem', color: 'rgba(255,255,255,0.4)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em' }}>Frame cuối</div>
+                <div style={{ fontSize: '.7rem', color: 'rgba(255,255,255,0.9)', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                  {fmtTime(latestPhoto.taken_at)}
+                </div>
+                {latestPhoto.width && (
+                  <div style={{ fontSize: '.6rem', color: 'rgba(255,255,255,0.38)' }}>{latestPhoto.width}×{latestPhoto.height}</div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Auto Refresh & Action buttons */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '.78rem', color: 'rgba(255,255,255,0.7)' }}>
               <Clock size={13} />
               <span>Tự động tải lại:</span>

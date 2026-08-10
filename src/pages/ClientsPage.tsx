@@ -439,6 +439,25 @@ export default function ClientsPage() {
       {modal === 'members' && membersClient && (
         <MembersModal client={membersClient} isSuperadmin={isSuperadmin} onClose={() => setModal(null)} />
       )}
+
+      {confirmAction && (
+        <ConfirmModal
+          title={confirmAction.title}
+          message={confirmAction.message}
+          confirmText={confirmAction.confirmText || 'Xác nhận'}
+          isPending={confirming}
+          onConfirm={async () => {
+            setConfirming(true)
+            try {
+              await confirmAction.onConfirm()
+              setConfirmAction(null)
+            } finally {
+              setConfirming(false)
+            }
+          }}
+          onClose={() => setConfirmAction(null)}
+        />
+      )}
     </div>
   )
 }
@@ -457,6 +476,13 @@ function MembersModal({ client, isSuperadmin, onClose }: { client: Client; isSup
   const [inviteRole, setInviteRole] = useState<'admin' | 'member'>('member')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
+  const [confirmAction, setConfirmAction] = useState<{
+    title: string
+    message: string
+    confirmText?: string
+    onConfirm: () => Promise<void>
+  } | null>(null)
+  const [confirming, setConfirming] = useState(false)
 
   const doSearch = async (q: string) => {
     setSearch(q)
@@ -485,9 +511,15 @@ function MembersModal({ client, isSuperadmin, onClose }: { client: Client; isSup
   }
 
   const kick = async (m: ClientMember) => {
-    if (!confirm(`Gỡ ${m.username} khỏi client?`)) return
-    await removeClientMember(client.id, m.user_id)
-    qc.invalidateQueries({ queryKey: ['client-members', client.id] })
+    setConfirmAction({
+      title: 'Gỡ thành viên',
+      message: `Gỡ ${m.username} khỏi client "${client.name}"?`,
+      confirmText: 'Gỡ',
+      onConfirm: async () => {
+        await removeClientMember(client.id, m.user_id)
+        qc.invalidateQueries({ queryKey: ['client-members', client.id] })
+      }
+    })
   }
 
   return (

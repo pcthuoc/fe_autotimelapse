@@ -37,6 +37,18 @@ export interface ClientMember {
   joined_at: string
 }
 
+export interface CameraScheduleRule {
+  id: string
+  camera_id: string
+  name: string
+  is_enabled: boolean
+  start_time: string
+  end_time: string
+  interval_sec: number
+  days_of_week: number[]
+  created_at: string
+}
+
 export interface Role {
   id: string
   code: string

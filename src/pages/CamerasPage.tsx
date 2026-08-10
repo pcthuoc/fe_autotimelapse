@@ -10,6 +10,7 @@ import {
 import type { Camera, Site } from '../api/types'
 import { useAuth } from '../contexts/AuthContext'
 import CameraLiveModal from '../components/CameraLiveModal'
+import CameraScheduleModal from '../components/CameraScheduleModal'
 import ConfirmModal from '../components/ConfirmModal'
 import {
   Search, Camera as CameraIcon, Wifi, WifiOff,
@@ -297,7 +298,7 @@ function DevTile({ label, value, sub, bars }: { label: string; value: string; su
   )
 }
 
-function CameraDeviceModal({ cam, onClose, canManage = true }: { cam: Camera; onClose: () => void; canManage?: boolean }) {
+function CameraDeviceModal({ cam, onClose, canManage = true, onOpenSchedule }: { cam: Camera; onClose: () => void; canManage?: boolean; onOpenSchedule?: () => void }) {
   if (!canManage) return null
   const qc = useQueryClient()
 
@@ -756,28 +757,23 @@ function CameraDeviceModal({ cam, onClose, canManage = true }: { cam: Camera; on
               {/* Device settings */}
               <div style={{ minWidth:200 }}>
                 <div className="section-label">SETTINGS</div>
-                <label style={{ fontSize:'.72rem', color:'var(--text-muted)', display:'block', marginBottom:5 }}>Trạng thái</label>
-                <div style={{ display:'flex', gap:4, marginBottom:10, flexWrap:'wrap' }}>
-                  {[
-                    { v:'active',      l:'Hoạt động',      c:'var(--status-ok)'      },
-                    { v:'maintenance', l:'Maint.',          c:'var(--status-warning)' },
-                    { v:'inactive',    l:'Không hoạt động', c:'var(--text-muted)'     },
-                  ].map(o => (
-                    <button key={o.v} onClick={()=>setStatusValue(o.v as any)}
-                      style={{ padding:'.3rem .5rem', borderRadius:7, cursor:'pointer', fontSize:'.7rem', fontWeight:statusValue===o.v?700:500, whiteSpace:'nowrap', border:`1px solid ${statusValue===o.v?o.c:'var(--border-color)'}`, background:statusValue===o.v?`${o.c}20`:'var(--bg-primary)', color:statusValue===o.v?o.c:'var(--text-muted)' }}>
-                      {o.l}
-                    </button>
-                  ))}
-                </div>
                 <label style={{ fontSize:'.72rem', color:'var(--text-muted)', display:'block', marginBottom:4 }}>Capture interval</label>
-                <div style={{ display:'flex', alignItems:'center', gap:5 }}>
+                <div style={{ display:'flex', alignItems:'center', gap:5, marginBottom:10 }}>
                   <input type="number" min={30} max={86400} value={intervalValue} onChange={e=>setIntervalValue(Number(e.target.value))} className="atl-input" style={{ width:72 }} />
                   <span style={{ fontSize:'.72rem', color:'var(--text-muted)' }}>sec</span>
                   <button className="atl-btn primary" style={{ fontSize:'.72rem', whiteSpace:'nowrap' }} disabled={savingDev} onClick={saveDevSettings}>
                     {savingDev ? '…' : 'Lưu lại'}
                   </button>
                 </div>
-                <div style={{ fontSize:'.65rem', color:'var(--text-muted)', marginTop:3 }}>Applied on next device check-in.</div>
+                <div style={{ fontSize:'.65rem', color:'var(--text-muted)', marginBottom:10 }}>Applied on next device check-in.</div>
+                <button
+                  type="button"
+                  className="atl-btn"
+                  style={{ width:'100%', fontSize:'.75rem', display:'inline-flex', alignItems:'center', justifyContent:'center', gap:6, background:'rgba(16,185,129,0.1)', borderColor:'rgba(16,185,129,0.3)', color:'#10b981', fontWeight:700 }}
+                  onClick={()=>onOpenSchedule?.()}
+                >
+                  <Clock size={14}/> Lịch hẹn giờ chụp
+                </button>
               </div>
             </div>
 
@@ -1303,7 +1299,7 @@ function CopyRow({ label, value, copyValue, fieldId, copiedField, onCopy, isCode
 function CameraCard({ cam }: { cam: Camera }) {
   const { user } = useAuth()
   const canManage = !!user?.is_staff || user?.client_role === 'admin' || !!user?.perms?.can_manage_cameras
-  const [modal, setModal] = useState<'control'|'info'|'live'|null>(null)
+  const [modal, setModal] = useState<'control'|'info'|'live'|'schedule'|null>(null)
   const dev = cam.device
   const battV = dev?.battery_voltage != null ? Number(dev.battery_voltage) : null
   const { pct: battPct, label: battLabel } = calcLFPPercent(battV, dev?.battery_percent)
@@ -1312,9 +1308,10 @@ function CameraCard({ cam }: { cam: Camera }) {
 
   return (
     <>
-      {modal==='control' && canManage && <CameraDeviceModal cam={cam} canManage={canManage} onClose={()=>setModal(null)} />}
-      {modal==='info'    && <CameraInfoModal   cam={cam} canManage={canManage} onClose={()=>setModal(null)} onOpenLive={()=>setModal('live')} />}
-      {modal==='live'    && <CameraLiveModal   camId={cam.id} initialCam={cam} onClose={()=>setModal(null)} />}
+      {modal==='control'  && canManage && <CameraDeviceModal cam={cam} canManage={canManage} onClose={()=>setModal(null)} onOpenSchedule={()=>setModal('schedule')} />}
+      {modal==='info'     && <CameraInfoModal   cam={cam} canManage={canManage} onClose={()=>setModal(null)} onOpenLive={()=>setModal('live')} />}
+      {modal==='live'     && <CameraLiveModal   camId={cam.id} initialCam={cam} onClose={()=>setModal(null)} />}
+      {modal==='schedule' && <CameraScheduleModal camera={cam} onClose={()=>setModal(null)} />}
 
       <div id={`cam-card-${cam.id}`} className="atl-card cam-card" style={{ cursor:'pointer' }} onClick={()=>setModal(canManage ? 'control' : 'live')}>
         {/* ── Header: name + online/offline status badge ── */}
@@ -1429,6 +1426,9 @@ function CameraCard({ cam }: { cam: Camera }) {
         <div className="cam-card-actions">
           <button className="atl-btn" style={{ fontSize:'.68rem', padding:'.35rem 2px', whiteSpace:'nowrap', color: cam.is_online ? '#ef4444' : undefined, borderColor: cam.is_online ? 'rgba(239,68,68,0.35)' : undefined }} onClick={(e)=>{ e.stopPropagation(); setModal('live') }}>
             <Wifi size={11}/> Live
+          </button>
+          <button className="atl-btn" style={{ fontSize:'.68rem', padding:'.35rem 2px', whiteSpace:'nowrap', color:'#10b981', borderColor:'rgba(16,185,129,0.35)' }} onClick={(e)=>{ e.stopPropagation(); setModal('schedule') }}>
+            <Clock size={11}/> Lịch chụp
           </button>
           <Link to={`/media/camera/${cam.id}`} className="atl-btn" style={{ fontSize:'.68rem', padding:'.35rem 2px', whiteSpace:'nowrap' }} onClick={(e)=>{ e.stopPropagation(); try { sessionStorage.setItem('atl-last-viewed-cam', cam.id) } catch {} }}>
             <ImageIcon size={11}/> Thư viện
@@ -1575,6 +1575,7 @@ export default function CamerasPage() {
   const { data, isLoading, refetch } = useQuery<{ results: Camera[]; count: number }>({
     queryKey: ['cameras', q, statusF],
     queryFn: () => getCameras({ q, status: statusF }).then(r => r.data),
+    refetchInterval: 15_000,
   })
 
   const allResults = data?.results ?? []
