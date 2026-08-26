@@ -3,19 +3,19 @@ import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import {
   getCameras, getCameraDevice, getCameraSettings, getLiveLatest,
-  updateCamera, createCamera, updateCameraDevice, deleteCamera,
-  getSites, createSite, searchUsers, regenerateCredential,
+  updateCamera, createCamera, deleteCamera, getCameraSimConfig,
+  getSites, createSite,
   getCameraMqttStatus, registerCameraMqtt, powerOnCM4, powerOffCM4,
 } from '../api/client'
 import type { Camera, Site } from '../api/types'
 import { useAuth } from '../contexts/AuthContext'
 import CameraLiveModal from '../components/CameraLiveModal'
 import CameraScheduleModal from '../components/CameraScheduleModal'
-import ConfirmModal from '../components/ConfirmModal'
 import {
   Search, Camera as CameraIcon, Wifi, WifiOff,
   X, Plus, RefreshCw, Settings, Building2, Clock, Image as ImageIcon, Shield,
   ChevronDown, ChevronRight, Wifi as WifiOn, LayoutGrid, Info, Copy, Check, Key, Trash2,
+  Loader2,
 } from 'lucide-react'
 
 /* ── util ── */
@@ -76,8 +76,18 @@ const CAMERA_MODELS = [
   { v: 'nikon_d7100', label: 'Nikon D7100' },
   { v: 'nikon_d7500', label: 'Nikon D7500' },
   { v: 'nikon_z50',   label: 'Nikon Z50' },
+  { v: 'canon_6d',    label: 'Canon EOS 6D' },
+  { v: 'canon_6d2',   label: 'Canon EOS 6D Mark II' },
+  { v: 'canon_5d3',   label: 'Canon EOS 5D Mark III' },
+  { v: 'canon_5d4',   label: 'Canon EOS 5D Mark IV' },
+  { v: 'canon_5ds',   label: 'Canon EOS 5Ds' },
+  { v: 'canon_7d',    label: 'Canon EOS 7D' },
+  { v: 'canon_7d2',   label: 'Canon EOS 7D Mark II' },
   { v: 'canon_200d',  label: 'Canon EOS 200D' },
   { v: 'canon_90d',   label: 'Canon EOS 90D' },
+  { v: 'canon_r',     label: 'Canon EOS R' },
+  { v: 'canon_r5',    label: 'Canon EOS R5' },
+  { v: 'canon_r6',    label: 'Canon EOS R6' },
   { v: 'generic',     label: 'Generic (khác)' },
 ]
 
@@ -95,13 +105,20 @@ const CAM_SETTINGS_FIELDS = [
   { key: 'white_balance',         label: 'White Balance' },
   { key: 'image_format',          label: 'Image Format'  },
   { key: 'image_size',            label: 'Image Size'    },
+  { key: 'aspect_ratio',          label: 'Aspect Ratio'  },
   { key: 'focus_mode',            label: 'Focus Mode'    },
   { key: 'autofocus',             label: 'Autofocus'     },
+  { key: 'manual_focus_drive',    label: 'Manual Focus Drive' },
   { key: 'liveview_af',           label: 'Live View AF'  },
   { key: 'capture_mode',          label: 'Capture Mode'  },
   { key: 'capture_target',        label: 'Capture Target'},
   { key: 'high_iso_nr',           label: 'High ISO NR'   },
   { key: 'long_exp_nr',           label: 'Long-exp. NR'  },
+  { key: 'drivemode',             label: 'Drive Mode'    },
+  { key: 'mirror_lockup',         label: 'Mirror Lock'   },
+  { key: 'auto_power_off',        label: 'Auto Power Off'},
+  { key: 'metering_mode',         label: 'Metering Mode' },
+  { key: 'battery_level',         label: 'Battery Level' },
 ] as const
 
 /* ── MqttStatusBadge: kiểm tra + đăng ký lại MQTT ngay trong modal ── */
@@ -169,10 +186,7 @@ function CredentialInline({ camId }: { camId: string }) {
     if (cfg) { setOpen(true); return }
     setLoading(true)
     try {
-      const { getCameraCredentials } = await import('../api/client')
-      // Dùng simconfig endpoint
-      const axios = (await import('../api/client')).api
-      const r = await axios.get(`/cameras/${camId}/simconfig/`)
+      const r = await getCameraSimConfig(camId)
       setCfg(r.data)
       setOpen(true)
     } catch { alert('Không tải được config') }
@@ -299,7 +313,6 @@ function DevTile({ label, value, sub, bars }: { label: string; value: string; su
 }
 
 function CameraDeviceModal({ cam, onClose, canManage = true, onOpenSchedule }: { cam: Camera; onClose: () => void; canManage?: boolean; onOpenSchedule?: () => void }) {
-  if (!canManage) return null
   const qc = useQueryClient()
 
   /* ── live view ── */
@@ -351,7 +364,12 @@ function CameraDeviceModal({ cam, onClose, canManage = true, onOpenSchedule }: {
   const { data: deviceData } = useQuery({
     queryKey: ['device', cam.id],
     queryFn: () => getCameraDevice(cam.id).then(r => r.data),
-    refetchInterval: 30_000,
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchInterval: (query) => {
+      const state = (query.state.data as any)?.cm4_power_state
+      return (state === 'powering_on' || state === 'shutting_down') ? 2000 : 15_000
+    },
   })
   const dev = deviceData as any
 
@@ -390,7 +408,7 @@ function CameraDeviceModal({ cam, onClose, canManage = true, onOpenSchedule }: {
       liveRef.current.running = false
       if (liveRef.current.timer) clearTimeout(liveRef.current.timer)
       if (liveRef.current.frameUrl) URL.revokeObjectURL(liveRef.current.frameUrl)
-      fetch(`/cameras/${cam.id}/live/stop/`, { method:'POST', credentials:'include', headers:{'X-CSRFToken': csrf()} }).catch(()=>{})
+      fetch(`/api/v1/cameras/${cam.id}/live/stop/`, { method:'POST', credentials:'include', headers:{'X-CSRFToken': csrf()} }).catch(()=>{})
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cam.id])
@@ -400,7 +418,7 @@ function CameraDeviceModal({ cam, onClose, canManage = true, onOpenSchedule }: {
   /* ── live view polling ── */
   const pollFrame = () => {
     if (!liveRef.current.running) return
-    fetch(`/cameras/${cam.id}/live/frame/?seq=${liveRef.current.seq}`, { credentials:'include' })
+    fetch(`/api/v1/cameras/${cam.id}/live/frame/?seq=${liveRef.current.seq}`, { credentials:'include' })
       .then(r => {
         if (r.status === 200) {
           liveRef.current.seq = parseInt(r.headers.get('X-Frame-Seq') || '0') || liveRef.current.seq
@@ -417,7 +435,7 @@ function CameraDeviceModal({ cam, onClose, canManage = true, onOpenSchedule }: {
   }
   const startLive = () => {
     liveRef.current.running = true; liveRef.current.seq = 0; setLiveOn(true)
-    fetch(`/cameras/${cam.id}/live/start/`, { method:'POST', credentials:'include', headers:{'X-CSRFToken': csrf()} })
+    fetch(`/api/v1/cameras/${cam.id}/live/start/`, { method:'POST', credentials:'include', headers:{'X-CSRFToken': csrf()} })
       .then(r => r.json()).then(d => { if (d.ok) pollFrame() })
       .catch(() => { liveRef.current.running = false; setLiveOn(false) })
   }
@@ -426,7 +444,7 @@ function CameraDeviceModal({ cam, onClose, canManage = true, onOpenSchedule }: {
     if (liveRef.current.timer) { clearTimeout(liveRef.current.timer); liveRef.current.timer = null }
     if (liveRef.current.frameUrl) { URL.revokeObjectURL(liveRef.current.frameUrl); liveRef.current.frameUrl = null }
     setLiveFrameUrl(null); setLiveOn(false)
-    fetch(`/cameras/${cam.id}/live/stop/`, { method:'POST', credentials:'include', headers:{'X-CSRFToken': csrf()} }).catch(()=>{})
+    fetch(`/api/v1/cameras/${cam.id}/live/stop/`, { method:'POST', credentials:'include', headers:{'X-CSRFToken': csrf()} }).catch(()=>{})
   }
 
   /* ── capture now ── */
@@ -434,7 +452,7 @@ function CameraDeviceModal({ cam, onClose, canManage = true, onOpenSchedule }: {
     if (captureState === 'waiting') return
     setCaptureState('waiting')
     const prevAt = photo?.taken_at || ''
-    fetch(`/cameras/${cam.id}/device/wake/`, { method:'POST', credentials:'include', headers:{'X-CSRFToken': csrf()} })
+    fetch(`/api/v1/cameras/${cam.id}/device/wake/`, { method:'POST', credentials:'include', headers:{'X-CSRFToken': csrf()} })
       .then(r => r.json())
       .then(d => {
         if (!d.ok) { setCaptureState('error'); setTimeout(()=>setCaptureState('idle'),4000); return }
@@ -456,7 +474,7 @@ function CameraDeviceModal({ cam, onClose, canManage = true, onOpenSchedule }: {
   const getSIMInfo = () => {
     if (simState !== 'idle') return
     setSimState('querying')
-    fetch(`/cameras/${cam.id}/device/sim/`, { method:'POST', credentials:'include', headers:{'X-CSRFToken': csrf()} })
+    fetch(`/api/v1/cameras/${cam.id}/device/sim/`, { method:'POST', credentials:'include', headers:{'X-CSRFToken': csrf()} })
       .then(() => { qc.invalidateQueries({ queryKey: ['device', cam.id] }); setSimState('idle') })
       .catch(() => setSimState('idle'))
   }
@@ -465,7 +483,7 @@ function CameraDeviceModal({ cam, onClose, canManage = true, onOpenSchedule }: {
   const saveDevSettings = async () => {
     setSavingDev(true)
     try {
-      await fetch(`/cameras/${cam.id}/device/settings/`, {
+      await fetch(`/api/v1/cameras/${cam.id}/device/settings/`, {
         method:'POST', credentials:'include',
         headers:{ 'Content-Type':'application/json', 'X-CSRFToken': csrf() },
         body: JSON.stringify({ capture_interval_sec: Number(intervalValue), status: statusValue }),
@@ -481,7 +499,7 @@ function CameraDeviceModal({ cam, onClose, canManage = true, onOpenSchedule }: {
   const pullSettings = async () => {
     setPullState('pulling')
     try {
-      const r = await fetch(`/cameras/${cam.id}/device/camera-settings/pull/`, { method:'POST', credentials:'include', headers:{'X-CSRFToken': csrf()} })
+      const r = await fetch(`/api/v1/cameras/${cam.id}/device/camera-settings/pull/`, { method:'POST', credentials:'include', headers:{'X-CSRFToken': csrf()} })
       const d = await r.json()
       if (d.sent) {
         const prevAt = d.last_synced_at
@@ -489,10 +507,10 @@ function CameraDeviceModal({ cam, onClose, canManage = true, onOpenSchedule }: {
         const poll = setInterval(async () => {
           tries++
           try {
-            const state = await fetch(`/cameras/${cam.id}/device/state/`, { credentials:'include' }).then(r => r.json())
-            if (state?.settings?.in_sync && state.settings.last_synced_at !== prevAt) {
+            const state = await fetch(`/api/v1/cameras/${cam.id}/device/state/`, { credentials:'include' }).then(r => r.json())
+            if (state?.settings?.last_synced_at && state.settings.last_synced_at !== prevAt) {
               clearInterval(poll); refetchSettings(); setPullState('idle'); showToast('Đã tải cài đặt từ camera')
-            } else if (tries >= 20) { clearInterval(poll); refetchSettings(); setPullState('idle') }
+            } else if (tries >= 15) { clearInterval(poll); refetchSettings(); setPullState('idle') }
           } catch { tries++ }
         }, 1500)
       } else { refetchSettings(); setPullState('idle') }
@@ -503,7 +521,7 @@ function CameraDeviceModal({ cam, onClose, canManage = true, onOpenSchedule }: {
   const saveAndSend = async () => {
     setSendState('sending')
     try {
-      await fetch(`/cameras/${cam.id}/device/camera-settings/`, {
+      await fetch(`/api/v1/cameras/${cam.id}/device/camera-settings/`, {
         method:'POST', credentials:'include',
         headers:{ 'Content-Type':'application/json', 'X-CSRFToken': csrf() },
         body: JSON.stringify(settingsForm),
@@ -516,12 +534,25 @@ function CameraDeviceModal({ cam, onClose, canManage = true, onOpenSchedule }: {
   /* ── CM4 power state ── */
   const cm4State = dev?.cm4_power_state || 'off'
   const isCM4Running = cm4State === 'running'
+  const prevCm4StateRef = useRef<string>(cm4State)
+
+  useEffect(() => {
+    const prev = prevCm4StateRef.current
+    if (prev === 'powering_on' && cm4State === 'running') {
+      showToast('🟢 CM4 đã khởi động thành công và trực tuyến!')
+    } else if (prev === 'powering_on' && cm4State === 'off') {
+      showToast('⚠️ Không nhận được phản hồi từ CM4 (Timeout 60s). Đã đưa về trạng thái tắt.', 'error')
+    } else if (prev === 'shutting_down' && cm4State === 'off') {
+      showToast('💤 CM4 đã tắt nguồn thành công.')
+    }
+    prevCm4StateRef.current = cm4State
+  }, [cm4State])
 
   const handlePowerOnCM4 = async () => {
     setPoweringCM4(true)
     try {
       await powerOnCM4(cam.id)
-      showToast('Đã gửi lệnh MQTT power_on_cm4 tới ESP32-S3. Đang bật CM4...')
+      showToast('Đã gửi lệnh bật nguồn CM4 tới ESP32-S3 (Timeout 60s)...')
       qc.invalidateQueries({ queryKey: ['device', cam.id] })
       qc.invalidateQueries({ queryKey: ['cameras'] })
     } catch (err: any) {
@@ -566,9 +597,15 @@ function CameraDeviceModal({ cam, onClose, canManage = true, onOpenSchedule }: {
   /* ── computed ── */
   const caps = ((camSettings as any)?.capabilities || {}) as Record<string, {choices?: string[]; writable?: boolean}>
   const applied = ((camSettings as any)?.applied || {}) as Record<string, string>
-  const inSync = Object.keys(settingsForm).every(k => !settingsForm[k] || applied[k] === settingsForm[k])
+  const inSync = Object.keys(settingsForm).every(k => {
+    if (!caps[k] || !settingsForm[k]) return true
+    return applied[k] === settingsForm[k]
+  })
   const todayCount = (latestData as any)?.today_count
   const totalCount = (latestData as any)?.total_count
+
+  // Keep all hooks above this guard so their order never changes between renders.
+  if (!canManage) return null
 
   return (
     <div className="modal-overlay" style={{ zIndex:999, alignItems:'flex-start', paddingTop:24, overflowY:'auto' }} onClick={onClose}>
@@ -618,25 +655,80 @@ function CameraDeviceModal({ cam, onClose, canManage = true, onOpenSchedule }: {
         <div className="modal-body cam-modal-grid">
 
           {/* Banner CM4 Power & Auto-Cycle Management — admin only */}
-          {canManage && <div className="cm4-power-banner" style={{ background: isCM4Running ? 'rgba(16,185,129,.1)' : 'rgba(245,158,11,.12)', border: `1px solid ${isCM4Running ? 'rgba(16,185,129,.3)' : 'rgba(245,158,11,.3)'}` }}>
-            <div style={{ fontSize:'.78rem', color: isCM4Running ? '#10b981' : '#f59e0b' }}>
-              <strong>⚡ Nguồn lõi CM4: {isCM4Running ? 'Đang bật (Cưỡng bức)' : cm4State === 'powering_on' ? 'Đang bật...' : cm4State === 'shutting_down' ? 'Đang tắt...' : 'Đang ngủ (Theo chu kỳ ESP32)'}</strong>
-              <div style={{ fontSize:'.72rem', color:'var(--text-muted)', marginTop:2 }}>
-                {isCM4Running
-                  ? 'CM4 đang bật cưỡng bức để xem/chỉnh thông số. Sau khi thao tác xong, hãy bấm "Tắt CM4" để ESP32-S3 quay lại quản lý chu kỳ ngủ/bật tự động tiết kiệm pin.'
-                  : 'Trạm đang chạy chế độ ngủ tiết kiệm điện theo chu kỳ của ESP32-S3. Bấm "Cưỡng bức bật CM4" nếu cần chỉnh thông số máy ảnh ngay.'}
+          {canManage && (
+            <div
+              className="cm4-power-banner"
+              style={{
+                background: isCM4Running
+                  ? 'rgba(16,185,129,.1)'
+                  : cm4State === 'powering_on'
+                  ? 'rgba(245,158,11,.12)'
+                  : 'rgba(107,114,128,.08)',
+                border: `1px solid ${
+                  isCM4Running
+                    ? 'rgba(16,185,129,.3)'
+                    : cm4State === 'powering_on'
+                    ? 'rgba(245,158,11,.3)'
+                    : 'var(--border-color)'
+                }`,
+              }}
+            >
+              <div style={{ fontSize: '.78rem', color: isCM4Running ? '#10b981' : cm4State === 'powering_on' ? '#f59e0b' : 'var(--text-secondary)' }}>
+                <strong>
+                  ⚡ Nguồn lõi CM4:{' '}
+                  {isCM4Running
+                    ? 'Đang bật (Cưỡng bức)'
+                    : cm4State === 'powering_on'
+                    ? 'Đang bật... (Timeout 60s)'
+                    : cm4State === 'shutting_down'
+                    ? 'Đang tắt...'
+                    : 'Đang ngủ (Theo chu kỳ ESP32)'}
+                </strong>
+                <div style={{ fontSize: '.72rem', color: 'var(--text-muted)', marginTop: 2 }}>
+                  {isCM4Running
+                    ? 'CM4 đang bật cưỡng bức để xem/chỉnh thông số. Sau khi thao tác xong, hãy bấm "Tắt CM4" để ESP32-S3 quay lại quản lý chu kỳ ngủ/bật tự động tiết kiệm pin.'
+                    : cm4State === 'powering_on'
+                    ? 'Đang gửi lệnh và chờ CM4 boot (~10-20s). Nếu sau 60s không nhận được phản hồi, hệ thống sẽ tự động đưa về trạng thái tắt để bạn có thể thao tác lại.'
+                    : cm4State === 'shutting_down'
+                    ? 'Đang gửi lệnh ngắt nguồn safe shutdown tới CM4...'
+                    : 'Trạm đang chạy chế độ ngủ tiết kiệm điện theo chu kỳ của ESP32-S3. Bấm "Cưỡng bức bật CM4" nếu cần chỉnh thông số máy ảnh ngay.'}
+                </div>
               </div>
+              {isCM4Running ? (
+                <button
+                  className="atl-btn ghost"
+                  style={{ flexShrink: 0, fontSize: '.75rem', borderColor: 'rgba(239,68,68,.4)', color: '#ef4444' }}
+                  disabled={poweringCM4 || cm4State === 'shutting_down'}
+                  onClick={handlePowerOffCM4}
+                >
+                  {poweringCM4 || cm4State === 'shutting_down' ? (
+                    <>
+                      <Loader2 size={12} style={{ animation: 'spin 1s linear infinite', marginRight: 4 }} />
+                      Đang tắt...
+                    </>
+                  ) : (
+                    '🔴 Tắt CM4 (Khôi phục chu kỳ)'
+                  )}
+                </button>
+              ) : (
+                <button
+                  className="atl-btn primary"
+                  style={{ flexShrink: 0, fontSize: '.75rem' }}
+                  disabled={poweringCM4 || cm4State === 'powering_on'}
+                  onClick={handlePowerOnCM4}
+                >
+                  {poweringCM4 || cm4State === 'powering_on' ? (
+                    <>
+                      <Loader2 size={12} style={{ animation: 'spin 1s linear infinite', marginRight: 4 }} />
+                      Đang bật...
+                    </>
+                  ) : (
+                    '⚡ Cưỡng bức Bật CM4'
+                  )}
+                </button>
+              )}
             </div>
-            {isCM4Running ? (
-              <button className="atl-btn ghost" style={{ flexShrink:0, fontSize:'.75rem', borderColor:'rgba(239,68,68,.4)', color:'#ef4444' }} disabled={poweringCM4} onClick={handlePowerOffCM4}>
-                {poweringCM4 ? '⏳ Đang gửi...' : '🔴 Tắt CM4 (Khôi phục chu kỳ)'}
-              </button>
-            ) : (
-              <button className="atl-btn primary" style={{ flexShrink:0, fontSize:'.75rem' }} disabled={poweringCM4 || cm4State === 'powering_on'} onClick={handlePowerOnCM4}>
-                {poweringCM4 || cm4State === 'powering_on' ? '⚡ Đang bật...' : '⚡ Cưỡng bức Bật CM4'}
-              </button>
-            )}
-          </div>}
+          )}
 
           {/* LEFT: photo + controls */}
           <div>
@@ -660,10 +752,27 @@ function CameraDeviceModal({ cam, onClose, canManage = true, onOpenSchedule }: {
 
             <div style={{ display:'flex', gap:5, marginTop:7 }}>
               <button className="atl-btn" style={{ flex:1, fontSize:'.75rem' }} onClick={()=>refetchLatest()}>↻ Refresh</button>
-              <button className="atl-btn primary" style={{ flex:'1.4', fontSize:'.75rem' }} disabled={captureState==='waiting'} onClick={captureNow}>
+              <button
+                className="atl-btn primary"
+                style={{ flex:'1.4', fontSize:'.75rem', opacity: isCM4Running ? 1 : 0.6 }}
+                disabled={!isCM4Running || captureState==='waiting'}
+                onClick={captureNow}
+                title={!isCM4Running ? 'Cần Bật CM4 trước khi chụp' : undefined}
+              >
                 {captureState==='waiting' ? <><RefreshCw size={12} style={{ animation:'spin 1s linear infinite', marginRight:4 }}/>Đang chụp…</> : '⚡ Capture now'}
               </button>
-              <button className="atl-btn" style={{ color:liveOn?'var(--status-error)':undefined, borderColor:liveOn?'var(--status-error)':undefined, fontSize:'.75rem' }} onClick={liveOn?stopLive:startLive}>
+              <button
+                className="atl-btn"
+                style={{
+                  color: liveOn ? 'var(--status-error)' : isCM4Running ? undefined : 'var(--text-muted)',
+                  borderColor: liveOn ? 'var(--status-error)' : undefined,
+                  fontSize: '.75rem',
+                  opacity: isCM4Running ? 1 : 0.6
+                }}
+                disabled={!isCM4Running}
+                onClick={liveOn ? stopLive : startLive}
+                title={!isCM4Running ? 'Cần Bật CM4 trước khi Live' : undefined}
+              >
                 {liveOn ? '◼ Stop' : '◉ Live'}
               </button>
               <a href={`/cameras/${cam.id}/live/`} className="atl-btn" style={{ fontSize:'.75rem' }} title="Mở live page">⤢</a>
@@ -733,7 +842,7 @@ function CameraDeviceModal({ cam, onClose, canManage = true, onOpenSchedule }: {
               <div style={{ border:'1px solid var(--border-color)', borderRadius:10, padding:'.7rem .8rem' }}>
                 <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
                   <span className="section-label" style={{ margin:0 }}>SIM INFO</span>
-                  <button className="atl-btn" style={{ fontSize:'.7rem' }} disabled={simState!=='idle'} onClick={getSIMInfo}>
+                  <button className="atl-btn" style={{ fontSize:'.7rem' }} disabled={!isCM4Running || simState!=='idle'} onClick={getSIMInfo} title={!isCM4Running ? 'Cần Bật CM4' : undefined}>
                     {simState==='querying' ? <><RefreshCw size={11} style={{ animation:'spin 1s linear infinite', marginRight:3 }}/>Đang truy vấn…</> : '📶 Get SIM info'}
                   </button>
                 </div>
@@ -772,11 +881,11 @@ function CameraDeviceModal({ cam, onClose, canManage = true, onOpenSchedule }: {
             </div>
 
             {/* Camera settings */}
-            <div style={{ border:'1px solid var(--border-color)', borderRadius:10, padding:'.7rem .8rem', flex:1 }}>
+            <div style={{ border:'1px solid var(--border-color)', borderRadius:10, padding:'.7rem .8rem', flex:1, opacity: isCM4Running ? 1 : 0.75, transition: 'all 0.2s ease' }}>
               <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
                 <span className="section-label" style={{ margin:0 }}>CAMERA SETTINGS</span>
                 <div style={{ display:'flex', gap:10, alignItems:'center' }}>
-                  <button className="atl-btn" style={{ fontSize:'.7rem' }} disabled={pullState==='pulling'} onClick={pullSettings}>
+                  <button className="atl-btn" style={{ fontSize:'.7rem' }} disabled={!isCM4Running || pullState==='pulling'} onClick={pullSettings} title={!isCM4Running ? 'Cần Bật CM4 để kéo thông số' : undefined}>
                     {pullState==='pulling' ? <><RefreshCw size={11} style={{ animation:'spin 1s linear infinite', marginRight:3 }}/>Pulling…</> : '↓ Pull from device'}
                   </button>
                   <span style={{ fontSize:'.72rem', color:inSync?'var(--status-ok)':'var(--text-muted)', whiteSpace:'nowrap' }}>
@@ -784,18 +893,31 @@ function CameraDeviceModal({ cam, onClose, canManage = true, onOpenSchedule }: {
                   </span>
                 </div>
               </div>
+
+              {!isCM4Running && (
+                <div style={{ background:'rgba(245,158,11,0.08)', border:'1px solid rgba(245,158,11,0.25)', borderRadius:8, padding:'6px 10px', fontSize:'.72rem', color:'#f59e0b', marginBottom:10, display:'flex', alignItems:'center', gap:6 }}>
+                  <span>🔒 CM4 đang tắt nguồn. Hãy bấm nút <strong>"⚡ Cưỡng bức Bật CM4"</strong> ở trên để mở khóa Live View và cài đặt thông số máy ảnh.</span>
+                </div>
+              )}
+
               <div className="camera-settings-grid">
                 {CAM_SETTINGS_FIELDS.map(({ key, label }) => {
                   const cap = caps[key] || {}
                   const choices: string[] = Array.isArray((cap as any).choices) ? (cap as any).choices : []
                   const writable = (cap as any).writable !== false
+                  const isEnabled = isCM4Running && writable
                   const value = settingsForm[key] || ''
                   return (
                     <div key={key}>
                       <label style={{ fontSize:'.65rem', color:'var(--text-muted)', display:'block', marginBottom:3 }}>{label}</label>
                       {choices.length > 0 ? (
-                        <select className="atl-select" style={{ width:'100%', fontSize:'.76rem' }} value={value} disabled={!writable}
-                                onChange={e=>setSettingsForm(f=>({...f,[key]:e.target.value}))}>
+                        <select
+                          className="atl-select"
+                          style={{ width:'100%', fontSize:'.76rem', opacity: isEnabled ? 1 : 0.6 }}
+                          value={value}
+                          disabled={!isEnabled}
+                          onChange={e=>setSettingsForm(f=>({...f,[key]:e.target.value}))}
+                        >
                           {choices.map(c=><option key={c} value={c}>{c}</option>)}
                         </select>
                       ) : (
@@ -1016,14 +1138,7 @@ function AddCameraModal({ onClose }: { onClose: () => void }) {
               <div className="form-group">
                 <label className="form-label">Model</label>
                 <select className="atl-select" value={form.camera_model} onChange={e=>setForm(f=>({...f,camera_model:e.target.value}))}>
-                  <option value="nikon_d5300">Nikon D5300</option>
-                  <option value="nikon_d3500">Nikon D3500</option>
-                  <option value="nikon_d7100">Nikon D7100</option>
-                  <option value="nikon_d7500">Nikon D7500</option>
-                  <option value="nikon_z50">Nikon Z50</option>
-                  <option value="canon_200d">Canon EOS 200D</option>
-                  <option value="canon_90d">Canon EOS 90D</option>
-                  <option value="generic">Generic (khác)</option>
+                  {CAMERA_MODELS.map(m => <option key={m.v} value={m.v}>{m.label}</option>)}
                 </select>
               </div>
               <div className="form-group">
@@ -1169,14 +1284,7 @@ function CameraInfoModal({ cam, onClose, onOpenLive, canManage = false }: { cam:
                 <div>
                   <label className="form-label">Dòng máy (Model)</label>
                   <select className="atl-input" style={{ width:'100%' }} value={formData.camera_model} onChange={e => setFormData({...formData, camera_model: e.target.value})}>
-                    <option value="generic">Generic (khác)</option>
-                    <option value="nikon_d5300">Nikon D5300</option>
-                    <option value="nikon_d3500">Nikon D3500</option>
-                    <option value="nikon_d7100">Nikon D7100</option>
-                    <option value="nikon_d7500">Nikon D7500</option>
-                    <option value="nikon_z50">Nikon Z50</option>
-                    <option value="canon_200d">Canon 200D</option>
-                    <option value="canon_90d">Canon 90D</option>
+                    {CAMERA_MODELS.map(m => <option key={m.v} value={m.v}>{m.label}</option>)}
                   </select>
                 </div>
                 <div>
@@ -1615,7 +1723,8 @@ export default function CamerasPage() {
   const toggleSite = (siteId: string) => {
     setExpandedSites(prev => {
       const next = new Set(prev)
-      next.has(siteId) ? next.delete(siteId) : next.add(siteId)
+      if (next.has(siteId)) next.delete(siteId)
+      else next.add(siteId)
       try {
         sessionStorage.setItem('atl-expanded-sites', JSON.stringify(Array.from(next)))
       } catch {}
@@ -1715,4 +1824,3 @@ export default function CamerasPage() {
     </div>
   )
 }
-

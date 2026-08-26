@@ -20,7 +20,7 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (r) => r,
   (err) => {
-    if (err.response?.status === 401 || err.response?.status === 403) {
+    if (err.response?.status === 401) {
       if (!window.location.pathname.startsWith('/login')) {
         window.location.href = '/login/?next=' + encodeURIComponent(window.location.pathname)
       }
@@ -32,7 +32,9 @@ api.interceptors.response.use(
 
 // ── Auth ──────────────────────────────────────────────
 export const login = (username: string, password: string, remember: boolean) =>
-  api.post('/auth/login/', { username, password, remember })
+  api.get('/auth/csrf/').then(() =>
+    api.post('/auth/login/', { username, password, remember }),
+  )
 
 export const logout = () => api.post('/auth/logout/')
 
@@ -109,7 +111,7 @@ export const getMediaGallery = (cameraPk: string, params?: Record<string, string
 export const createArchive = (cameraPk: string, data: Record<string, unknown>) =>
   api.post(`/media/camera/${cameraPk}/archive/`, data)
 
-export const getArchiveStatus = (pk: string) => api.get(`/media/archive/${pk}/status/`)
+export const getArchiveStatus = (pk: string) => api.get(`/archives/${pk}/`)
 // ── Downloads center ─────────────────────────────
 export const getDownloads = () => api.get('/downloads/')
 // ── Video Renders ─────────────────────────────────────
@@ -119,7 +121,7 @@ export const getRenders = (params?: Record<string, string>) =>
 export const createRender = (cameraPk: string, data: Record<string, unknown>) =>
   api.post(`/cameras/${cameraPk}/render/`, data)
 
-export const getRenderStatus = (pk: string) => api.get(`/renders/${pk}/status/`)
+export const getRenderStatus = (pk: string) => api.get(`/renders/${pk}/`)
 
 export const deleteRender = (pk: string) => api.delete(`/renders/${pk}/`)
 

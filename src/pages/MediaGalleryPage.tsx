@@ -84,7 +84,12 @@ export default function MediaGalleryPage() {
   const totalPages = Math.ceil((data?.count ?? 0) / 60)
 
   const toggleSelect = (id: string) => {
-    setSelected((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
+    setSelected((s) => {
+      const n = new Set(s)
+      if (n.has(id)) n.delete(id)
+      else n.add(id)
+      return n
+    })
   }
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 5000) }

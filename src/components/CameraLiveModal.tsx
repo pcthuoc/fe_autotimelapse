@@ -49,6 +49,7 @@ export default function CameraLiveModal({ camId, initialCam, onClose }: CameraLi
   const [latestPhoto, setLatestPhoto] = useState<Media | null>(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [wakeState, setWakeState] = useState<'idle' | 'waking' | 'done' | 'error'>('idle')
+  const [poweringCM4, setPoweringCM4] = useState(false)
 
   const containerRef = useRef<HTMLDivElement>(null)
   const liveRef = useRef({
@@ -113,14 +114,14 @@ export default function CameraLiveModal({ camId, initialCam, onClose }: CameraLi
       liveRef.current.running = false
       if (liveRef.current.timer) clearTimeout(liveRef.current.timer)
       if (liveRef.current.frameUrl) URL.revokeObjectURL(liveRef.current.frameUrl)
-      fetch(`/cameras/${camId}/live/stop/`, { method: 'POST', credentials: 'include', headers: { 'X-CSRFToken': csrf() } }).catch(() => {})
+      fetch(`/api/v1/cameras/${camId}/live/stop/`, { method: 'POST', credentials: 'include', headers: { 'X-CSRFToken': csrf() } }).catch(() => {})
     }
   }, [camId])
 
   // MJPEG / frame polling loop
   const pollFrame = () => {
     if (!liveRef.current.running) return
-    fetch(`/cameras/${camId}/live/frame/?seq=${liveRef.current.seq}`, { credentials: 'include' })
+    fetch(`/api/v1/cameras/${camId}/live/frame/?seq=${liveRef.current.seq}`, { credentials: 'include' })
       .then((r) => {
         if (r.status === 200) {
           liveRef.current.seq = parseInt(r.headers.get('X-Frame-Seq') || '0') || liveRef.current.seq
@@ -144,7 +145,7 @@ export default function CameraLiveModal({ camId, initialCam, onClose }: CameraLi
     liveRef.current.running = true
     liveRef.current.seq = 0
     setLiveOn(true)
-    fetch(`/cameras/${camId}/live/start/`, {
+    fetch(`/api/v1/cameras/${camId}/live/start/`, {
       method: 'POST',
       credentials: 'include',
       headers: { 'X-CSRFToken': csrf() },
@@ -171,7 +172,7 @@ export default function CameraLiveModal({ camId, initialCam, onClose }: CameraLi
     }
     setLiveFrameUrl(null)
     setLiveOn(false)
-    fetch(`/cameras/${camId}/live/stop/`, {
+    fetch(`/api/v1/cameras/${camId}/live/stop/`, {
       method: 'POST',
       credentials: 'include',
       headers: { 'X-CSRFToken': csrf() },
@@ -183,7 +184,7 @@ export default function CameraLiveModal({ camId, initialCam, onClose }: CameraLi
     if (wakeState === 'waking') return
     setWakeState('waking')
     const prevAt = latestPhoto?.taken_at || ''
-    fetch(`/cameras/${camId}/device/wake/`, {
+    fetch(`/api/v1/cameras/${camId}/device/wake/`, {
       method: 'POST',
       credentials: 'include',
       headers: { 'X-CSRFToken': csrf() },
@@ -235,6 +236,7 @@ export default function CameraLiveModal({ camId, initialCam, onClose }: CameraLi
   const batt = battPct ?? dev?.battery_percent ?? null
   const battColor = batt === null ? 'rgba(255,255,255,0.4)' : batt < 20 ? '#ef4444' : batt < 50 ? '#f59e0b' : '#10b981'
   const isOnline = camera?.is_online || false
+  const isCM4Running = dev?.cm4_power_state === 'running'
 
   return (
     <div
@@ -626,9 +628,59 @@ export default function CameraLiveModal({ camId, initialCam, onClose }: CameraLi
             gap: 12,
           }}
         >
-          {/* Live Stream Start/Stop */}
+          {/* Live Stream Start/Stop / Power ON CM4 */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            {!liveOn ? (
+            {!isCM4Running ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <button
+                  disabled={true}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 7,
+                    padding: '8px 16px',
+                    borderRadius: 8,
+                    background: 'rgba(255, 255, 255, 0.08)',
+                    color: 'rgba(255, 255, 255, 0.4)',
+                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                    fontWeight: 700,
+                    fontSize: '.82rem',
+                    cursor: 'not-allowed',
+                  }}
+                  title="Cần Bật nguồn CM4 trước khi phát Live Stream"
+                >
+                  <Play size={15} fill="currentColor" /> Start Live Stream
+                </button>
+                <button
+                  onClick={async () => {
+                    setPoweringCM4(true)
+                    try {
+                      const { powerOnCM4 } = await import('../api/client')
+                      await powerOnCM4(camId)
+                    } catch { /* ignore */ }
+                    finally { setPoweringCM4(false) }
+                  }}
+                  disabled={poweringCM4 || dev?.cm4_power_state === 'powering_on'}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '8px 16px',
+                    borderRadius: 8,
+                    background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                    color: '#fff',
+                    border: 'none',
+                    fontWeight: 800,
+                    fontSize: '.82rem',
+                    cursor: 'pointer',
+                    boxShadow: '0 4px 12px rgba(245, 158, 11, 0.3)',
+                  }}
+                >
+                  <Zap size={14} fill="#fff" />
+                  {poweringCM4 || dev?.cm4_power_state === 'powering_on' ? 'Đang bật CM4…' : '⚡ Bật nguồn CM4'}
+                </button>
+              </div>
+            ) : !liveOn ? (
               <button
                 onClick={startLive}
                 style={{
